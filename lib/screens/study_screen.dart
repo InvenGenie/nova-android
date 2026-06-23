@@ -1,14 +1,19 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../services/api_service.dart';
 import '../models/lesson.dart';
+import '../providers/auth_provider.dart';
 import '../theme/app_theme.dart';
 
 class StudyScreen extends StatefulWidget {
   final int? subjectId;
   final String? subjectName;
   final int? lessonId;
+  final int? boardId;
+  final int? classId;
+  final int? pubId;
 
-  const StudyScreen({super.key, this.subjectId, this.subjectName, this.lessonId});
+  const StudyScreen({super.key, this.subjectId, this.subjectName, this.lessonId, this.boardId, this.classId, this.pubId});
 
   @override
   State<StudyScreen> createState() => _StudyScreenState();
@@ -29,13 +34,22 @@ class _StudyScreenState extends State<StudyScreen> {
 
   Future<void> _loadLessons() async {
     try {
-      final data = await _api.getLessons(1, 4, 1, widget.subjectId ?? 10);
+      final user = context.read<AuthProvider>().user;
+      final userClass = user?.userClass ?? '';
+      final classNum = int.tryParse(userClass.replaceAll(RegExp(r'[^\d]'), '')) ?? 1;
+      final classId = widget.classId ?? classNum;
+      final board = widget.boardId ?? 1;
+      final pub = widget.pubId ?? 1;
+
+      final data = await _api.getLessons(board, classId, pub, widget.subjectId ?? 10);
       if (mounted) {
         setState(() {
-          _lessons = data.map((l) => Lesson.fromJson(l)).toList();
+          _lessons = data.whereType<Map<String, dynamic>>().map((l) => Lesson.fromJson(l)).toList();
           _loading = false;
           if (_lessons.isNotEmpty) {
-            _selectLesson(_lessons.first);
+            _selectLesson(widget.lessonId != null
+                ? _lessons.firstWhere((l) => l.lessonId == widget.lessonId, orElse: () => _lessons.first)
+                : _lessons.first);
           }
         });
       }
@@ -49,7 +63,20 @@ class _StudyScreenState extends State<StudyScreen> {
       _selectedLesson = lesson;
       _loadingContent = true;
     });
-    await Future.delayed(const Duration(milliseconds: 300));
+    try {
+      if (lesson.content == null) {
+        final data = await _api.getLessons(1, 1, 1, widget.subjectId ?? 10);
+        if (mounted) {
+          final match = data.whereType<Map<String, dynamic>>().firstWhere(
+            (l) => l['lesson_id'] == lesson.lessonId || l['id'] == lesson.lessonId,
+            orElse: () => <String, dynamic>{},
+          );
+          if (match.isNotEmpty) {
+            _selectedLesson = Lesson.fromJson(match);
+          }
+        }
+      }
+    } catch (_) {}
     if (mounted) setState(() => _loadingContent = false);
   }
 
@@ -60,7 +87,21 @@ class _StudyScreenState extends State<StudyScreen> {
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : _lessons.isEmpty
-              ? const Center(child: Text('No lessons available'))
+              ? Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(32),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.auto_stories, size: 64, color: Colors.grey.shade300),
+                        const SizedBox(height: 16),
+                        Text('No lessons available', style: TextStyle(fontSize: 18, color: Colors.grey.shade600)),
+                        const SizedBox(height: 8),
+                        Text('Check back later for new content', style: TextStyle(fontSize: 14, color: Colors.grey.shade500)),
+                      ],
+                    ),
+                  ),
+                )
               : Row(
                   children: [
                     if (MediaQuery.of(context).size.width > 600)
@@ -127,6 +168,7 @@ class _StudyScreenState extends State<StudyScreen> {
   }
 
   Widget _buildLessonContent() {
+    final content = _selectedLesson!.content;
     return SingleChildScrollView(
       padding: const EdgeInsets.all(24),
       child: Column(
@@ -134,16 +176,40 @@ class _StudyScreenState extends State<StudyScreen> {
         children: [
           Text(_selectedLesson!.lessonName, style: Theme.of(context).textTheme.headlineMedium),
           const SizedBox(height: 20),
-          Text(
-            _selectedLesson!.content ?? 'Lesson content will be loaded from the server.\n\nThis is an interactive learning module designed to help you understand the topic thoroughly.',
-            style: Theme.of(context).textTheme.bodyLarge?.copyWith(height: 1.7),
-          ),
+          if (content != null && content.isNotEmpty)
+            Text(content, style: Theme.of(context).textTheme.bodyLarge?.copyWith(height: 1.7))
+          else
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                color: Colors.grey.shade50,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Column(
+                children: [
+                  Icon(Icons.construction, size: 48, color: Colors.grey.shade400),
+                  const SizedBox(height: 12),
+                  Text('Content being prepared', style: TextStyle(fontSize: 16, color: Colors.grey.shade600)),
+                  const SizedBox(height: 4),
+                  Text('This lesson will have study material soon', style: TextStyle(fontSize: 13, color: Colors.grey.shade500)),
+                ],
+              ),
+            ),
           const SizedBox(height: 32),
           Row(
             children: [
               Expanded(
                 child: ElevatedButton.icon(
-                  onPressed: () {},
+                  onPressed: content != null && content.isNotEmpty
+                      ? () {
+                          Navigator.pushNamed(context, '/practice', arguments: {
+                            'subject_id': widget.subjectId,
+                            'subject_name': widget.subjectName,
+                            'lesson_id': _selectedLesson!.lessonId,
+                          });
+                        }
+                      : null,
                   icon: const Icon(Icons.quiz_outlined),
                   label: const Text('Practice Questions'),
                 ),

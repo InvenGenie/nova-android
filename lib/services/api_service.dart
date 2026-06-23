@@ -59,6 +59,15 @@ class ApiService {
     return jsonDecode(response.body);
   }
 
+  List<dynamic> _extractList(dynamic body, [String? key]) {
+    if (body is List) return body;
+    if (body is Map) {
+      if (key != null && body[key] is List) return body[key];
+      return body.values.firstWhere((v) => v is List, orElse: () => <dynamic>[]);
+    }
+    return <dynamic>[];
+  }
+
   Future<List<dynamic>> getSubjects({int? board, int? classId, int? pub}) async {
     final params = <String, String>{};
     if (board != null) params['board'] = board.toString();
@@ -67,22 +76,22 @@ class ApiService {
 
     final uri = Uri.parse('$_baseUrl/get_subjects').replace(queryParameters: params.isNotEmpty ? params : null);
     final response = await http.get(uri, headers: _headers);
-    return jsonDecode(response.body) as List<dynamic>;
+    return _extractList(jsonDecode(response.body), 'subjects');
   }
 
   Future<List<dynamic>> getBoards() async {
     final response = await http.get(Uri.parse('$_baseUrl/get_boards'), headers: _headers);
-    return jsonDecode(response.body) as List<dynamic>;
+    return _extractList(jsonDecode(response.body), 'boards');
   }
 
   Future<List<dynamic>> getClasses() async {
     final response = await http.get(Uri.parse('$_baseUrl/get_classes'), headers: _headers);
-    return jsonDecode(response.body) as List<dynamic>;
+    return _extractList(jsonDecode(response.body), 'classes');
   }
 
   Future<List<dynamic>> getPublications() async {
     final response = await http.get(Uri.parse('$_baseUrl/get_publications'), headers: _headers);
-    return jsonDecode(response.body) as List<dynamic>;
+    return _extractList(jsonDecode(response.body), 'publications');
   }
 
   Future<List<dynamic>> getLessons(int board, int classId, int pub, int subjectId) async {
@@ -96,7 +105,7 @@ class ApiService {
       }),
       headers: _headers,
     );
-    return jsonDecode(response.body) as List<dynamic>;
+    return _extractList(jsonDecode(response.body), 'lessons');
   }
 
   Future<Map<String, dynamic>> getStudyPlan(String username) async {

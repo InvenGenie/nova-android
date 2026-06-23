@@ -5,6 +5,10 @@ import '../theme/app_theme.dart';
 import '../services/api_service.dart';
 import '../models/study_plan.dart';
 import '../models/user.dart';
+import 'subjects_screen.dart';
+import 'practice_screen.dart';
+import 'report_screen.dart';
+import 'profile_screen.dart';
 
 class StudentDashboard extends StatefulWidget {
   const StudentDashboard({super.key});
@@ -45,10 +49,10 @@ class _StudentDashboardState extends State<StudentDashboard> {
 
     final screens = [
       _buildDashboard(user),
-      const SizedBox(),
-      const SizedBox(),
-      const SizedBox(),
-      _buildProfile(),
+      const SubjectsScreen(),
+      const PracticeScreen(),
+      const ReportScreen(),
+      const ProfileScreen(),
     ];
 
     return Scaffold(
@@ -172,7 +176,7 @@ class _StudentDashboardState extends State<StudentDashboard> {
           const SizedBox(height: 12),
           Text('No plan for today', style: TextStyle(fontSize: 16, color: Colors.grey.shade600)),
           const SizedBox(height: 4),
-          Text('Add subjects to your study plan', style: TextStyle(fontSize: 13, color: Colors.grey.shade500)),
+          Text('Tap Subjects to start learning', style: TextStyle(fontSize: 13, color: Colors.grey.shade500)),
         ],
       ),
     );
@@ -206,9 +210,5 @@ class _StudentDashboardState extends State<StudentDashboard> {
         },
       ),
     );
-  }
-
-  Widget _buildProfile() {
-    return const SizedBox();
   }
 }

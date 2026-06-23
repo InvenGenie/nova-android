@@ -36,20 +36,21 @@ class _SubjectsScreenState extends State<SubjectsScreen> {
       final userClass = user.userClass;
       Map<String, dynamic>? matchedClass;
       for (final c in classesData) {
-        final name = (c['class_name'] as String).toLowerCase().replaceAll(RegExp(r'[^\d]'), '');
+        if (c is! Map) continue;
+        final name = (c['class_name'] as String? ?? '').toLowerCase().replaceAll(RegExp(r'[^\d]'), '');
         final userCls = (userClass ?? '').toLowerCase().replaceAll(RegExp(r'[^\d]'), '');
         if (name == userCls) {
-          matchedClass = c;
+          matchedClass = c as Map<String, dynamic>;
           break;
         }
       }
-      final classId = matchedClass?['class_id'] ?? (classesData.isNotEmpty ? classesData[0]['class_id'] : 1);
+      final classId = matchedClass?['class_id'] ?? (classesData.isNotEmpty && classesData[0] is Map ? classesData[0]['class_id'] : 1);
 
       final subjectsData = await _api.getSubjects(board: _boardId, classId: classId, pub: _pubId);
       if (mounted) {
         setState(() {
-          _subjects = subjectsData.map((s) => Subject.fromJson(s)).toList();
-          _classes = classesData.cast<Map<String, dynamic>>();
+          _subjects = subjectsData.map((s) => s is Map<String, dynamic> ? Subject.fromJson(s) : Subject(subjectId: 0, subjectName: '')).toList();
+          _classes = classesData.whereType<Map<String, dynamic>>().toList();
           _loading = false;
         });
       }
@@ -71,12 +72,12 @@ class _SubjectsScreenState extends State<SubjectsScreen> {
                 setState(() => _loading = true);
                 try {
                   final data = await _api.getSubjects(board: _boardId, classId: classId, pub: _pubId);
-                  if (mounted) setState(() { _subjects = data.map((s) => Subject.fromJson(s)).toList(); _loading = false; });
+                  if (mounted) setState(() { _subjects = data.map((s) => s is Map<String, dynamic> ? Subject.fromJson(s) : Subject(subjectId: 0, subjectName: '')).toList(); _loading = false; });
                 } catch (e) {
                   if (mounted) setState(() { _error = e.toString(); _loading = false; });
                 }
               },
-              itemBuilder: (_) => _classes.map<PopupMenuItem<int>>((c) => PopupMenuItem(value: c['class_id'] as int, child: Text(c['class_name'] as String))).toList(),
+              itemBuilder: (_) => _classes.map<PopupMenuItem<int>>((c) => PopupMenuItem(value: c['class_id'] as int? ?? 0, child: Text(c['class_name'] as String? ?? ''))).toList(),
             ),
         ],
       ),

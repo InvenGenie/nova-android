@@ -23,15 +23,16 @@ class AuthProvider extends ChangeNotifier {
       if (data['success'] == true) {
         final token = data['token'] ?? data['access_token'] ?? data['session_id'];
         await _api.setToken(token);
+        final userFields = data['user'] ?? data;
         try {
           final sessionData = await _api.getSession();
           if (sessionData['success'] == true) {
             _user = User.fromJson({...sessionData, 'token': token});
           } else {
-            _user = User.fromJson({'username': username, 'name': username, 'role': 'student', 'token': token});
+            _user = User.fromJson({...userFields, 'username': username, 'token': token});
           }
         } catch (_) {
-          _user = User.fromJson({'username': username, 'name': username, 'role': 'student', 'token': token});
+          _user = User.fromJson({...userFields, 'username': username, 'token': token});
         }
         _loading = false;
         notifyListeners();
