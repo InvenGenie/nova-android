@@ -1,0 +1,16 @@
+# Flutter
+.dart_tool/
+.packages
+build/
+*.iml
+.idea/
+.metadata
+
+# Env
+.env
+
+# Android
+local.properties
+
+# macOS
+.DS_Store
