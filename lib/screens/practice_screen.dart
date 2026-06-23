@@ -26,7 +26,10 @@ class _PracticeScreenState extends State<PracticeScreen> {
       final data = await _api.getSubjects(board: 1, classId: 1, pub: 1);
       if (mounted) {
         setState(() {
-          _subjects = data.whereType<Map<String, dynamic>>().map((s) => Subject.fromJson(s)).toList();
+          _subjects = data
+              .whereType<Map<String, dynamic>>()
+              .map((s) => Subject.fromJson(s))
+              .toList();
           _loading = false;
         });
       }
@@ -38,98 +41,311 @@ class _PracticeScreenState extends State<PracticeScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Practice')),
       body: _loading
-          ? const Center(child: CircularProgressIndicator())
-          : _subjects.isEmpty
-              ? Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(32),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Container(
-                          width: 80,
-                          height: 80,
-                          decoration: BoxDecoration(color: AppTheme.warning.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(20)),
-                          child: const Icon(Icons.edit_note, size: 40, color: AppTheme.warning),
-                        ),
-                        const SizedBox(height: 24),
-                        Text('Practice Questions', style: Theme.of(context).textTheme.headlineMedium),
-                        const SizedBox(height: 12),
-                        Text('Select a subject and mode to start practicing.', style: TextStyle(color: Colors.grey.shade600, height: 1.5), textAlign: TextAlign.center),
-                        const SizedBox(height: 32),
-                        Wrap(
-                          spacing: 12,
-                          runSpacing: 12,
+          ? _buildLoading()
+          : RefreshIndicator(
+              onRefresh: _loadSubjects,
+              color: AppTheme.accent,
+              child: CustomScrollView(
+                slivers: [
+                  SliverToBoxAdapter(child: _buildHeader()),
+                  SliverToBoxAdapter(child: _buildModeSection()),
+                  if (_subjects.isNotEmpty)
+                    SliverToBoxAdapter(
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(20, 24, 20, 8),
+                        child: Row(
                           children: [
-                            _modeChip('Summary', Icons.summarize, AppTheme.primary, () {}),
-                            _modeChip('MCQ', Icons.quiz, AppTheme.warning, () {}),
-                            _modeChip('Numerical', Icons.calculate, AppTheme.accent, () {}),
-                            _modeChip('Mixed', Icons.shuffle, AppTheme.success, () {}),
+                            const Text('📖 ', style: TextStyle(fontSize: 20)),
+                            Text('Choose Subject',
+                                style:
+                                    Theme.of(context).textTheme.titleLarge),
                           ],
                         ),
-                      ],
+                      ),
+                    ),
+                  SliverPadding(
+                    padding: const EdgeInsets.fromLTRB(20, 8, 20, 40),
+                    sliver: SliverList(
+                      delegate: SliverChildBuilderDelegate(
+                        (context, i) => _subjectCard(_subjects[i], i),
+                        childCount: _subjects.length,
+                      ),
                     ),
                   ),
-                )
-              : RefreshIndicator(
-                  onRefresh: _loadSubjects,
-                  child: ListView(
-                    padding: const EdgeInsets.all(16),
-                    children: [
-                      Text('Choose a subject to practice', style: Theme.of(context).textTheme.titleLarge),
-                      const SizedBox(height: 16),
-                      ..._subjects.map((s) => _subjectCard(s)),
-                      const SizedBox(height: 24),
-                      Text('Practice Mode', style: Theme.of(context).textTheme.titleLarge),
-                      const SizedBox(height: 12),
-                      Wrap(
-                        spacing: 12,
-                        runSpacing: 12,
-                        children: [
-                          _modeChip('Summary', Icons.summarize, AppTheme.primary, () {}),
-                          _modeChip('MCQ', Icons.quiz, AppTheme.warning, () {}),
-                          _modeChip('Numerical', Icons.calculate, AppTheme.accent, () {}),
-                          _modeChip('Mixed', Icons.shuffle, AppTheme.success, () {}),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
+                ],
+              ),
+            ),
     );
   }
 
-  Widget _subjectCard(Subject subject) {
-    return Card(
-      margin: const EdgeInsets.only(bottom: 10),
-      child: ListTile(
-        leading: Container(
-          width: 44,
-          height: 44,
-          decoration: BoxDecoration(
-            color: AppTheme.primary.withValues(alpha: 0.1),
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Icon(Icons.auto_stories, color: AppTheme.primary),
+  Widget _buildHeader() {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(20, 60, 20, 28),
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFFFF6B6B), Color(0xFFFF9F43)],
         ),
-        title: Text(subject.subjectName, style: const TextStyle(fontWeight: FontWeight.w600)),
-        subtitle: Text('Tap to practice', style: TextStyle(color: Colors.grey.shade600)),
-        trailing: const Icon(Icons.chevron_right),
-        onTap: () => Navigator.pushNamed(context, '/study', arguments: {
-          'subject_id': subject.subjectId,
-          'subject_name': subject.subjectName,
-        }),
+        borderRadius: BorderRadius.vertical(bottom: Radius.circular(36)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('🎮 Practice',
+              style: TextStyle(
+                fontSize: 28,
+                fontWeight: FontWeight.w900,
+                color: Colors.white,
+                fontFamily: 'Nunito',
+              )),
+          Text('Sharpen your skills & master topics!',
+              style: TextStyle(
+                fontSize: 14,
+                color: Colors.white.withValues(alpha: 0.85),
+                fontFamily: 'Nunito',
+                fontWeight: FontWeight.w600,
+              )),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              _headerBadge('🎯 Daily Challenge', AppTheme.accentYellow),
+              const SizedBox(width: 10),
+              _headerBadge('⚡ Quick Practice', Colors.white),
+            ],
+          ),
+        ],
       ),
     );
   }
 
-  Widget _modeChip(String label, IconData icon, Color color, VoidCallback onTap) {
-    return ActionChip(
-      avatar: Icon(icon, size: 18, color: color),
-      label: Text(label),
-      onPressed: onTap,
-      backgroundColor: color.withValues(alpha: 0.08),
+  Widget _headerBadge(String text, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.2),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: color.withValues(alpha: 0.4)),
+      ),
+      child: Text(text,
+          style: const TextStyle(
+            fontSize: 13,
+            color: Colors.white,
+            fontFamily: 'Nunito',
+            fontWeight: FontWeight.w700,
+          )),
+    );
+  }
+
+  Widget _buildModeSection() {
+    final modes = [
+      {
+        'emoji': '📝',
+        'label': 'Summary',
+        'sub': 'Review key points',
+        'color': AppTheme.primary,
+      },
+      {
+        'emoji': '🧠',
+        'label': 'MCQ',
+        'sub': 'Multiple choice',
+        'color': AppTheme.accentOrange,
+      },
+      {
+        'emoji': '🔢',
+        'label': 'Numerical',
+        'sub': 'Solve problems',
+        'color': AppTheme.accentCyan,
+      },
+      {
+        'emoji': '🎲',
+        'label': 'Mixed',
+        'sub': 'Random mix',
+        'color': AppTheme.accentPink,
+      },
+    ];
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 24, 20, 0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Text('⚡ ', style: TextStyle(fontSize: 20)),
+              Text('Practice Modes',
+                  style: Theme.of(context).textTheme.titleLarge),
+            ],
+          ),
+          const SizedBox(height: 14),
+          GridView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 2,
+              childAspectRatio: 2.2,
+              crossAxisSpacing: 12,
+              mainAxisSpacing: 12,
+            ),
+            itemCount: modes.length,
+            itemBuilder: (context, i) {
+              final m = modes[i];
+              final color = m['color'] as Color;
+              return GestureDetector(
+                onTap: () {},
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: color.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(18),
+                    border: Border.all(
+                        color: color.withValues(alpha: 0.25), width: 1.5),
+                  ),
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 14, vertical: 10),
+                  child: Row(
+                    children: [
+                      Text(m['emoji'] as String,
+                          style: const TextStyle(fontSize: 22)),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Text(m['label'] as String,
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 13,
+                                  color: color,
+                                  fontFamily: 'Nunito',
+                                )),
+                            Text(m['sub'] as String,
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: color.withValues(alpha: 0.7),
+                                  fontFamily: 'Nunito',
+                                )),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _subjectCard(Subject subject, int index) {
+    final gradient = AppTheme.subjectGradient(subject.subjectName);
+    final emoji = AppTheme.subjectEmoji(subject.subjectName);
+    final color = gradient.colors.first;
+
+    return GestureDetector(
+      onTap: () => Navigator.pushNamed(context, '/study', arguments: {
+        'subject_id': subject.subjectId,
+        'subject_name': subject.subjectName,
+      }),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [
+            BoxShadow(
+              color: color.withValues(alpha: 0.12),
+              blurRadius: 16,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 52,
+              height: 52,
+              decoration: BoxDecoration(
+                gradient: gradient,
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Center(
+                  child: Text(emoji, style: const TextStyle(fontSize: 24))),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(subject.subjectName,
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                        fontFamily: 'Nunito',
+                        color: Color(0xFF1A0A3E),
+                      )),
+                  Text('Tap to practice',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.grey.shade500,
+                        fontFamily: 'Nunito',
+                      )),
+                ],
+              ),
+            ),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                gradient: gradient,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Text('Start ▶',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    fontFamily: 'Nunito',
+                  )),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLoading() {
+    return Column(
+      children: [
+        Container(
+          height: 220,
+          decoration: const BoxDecoration(
+            gradient:
+                LinearGradient(colors: [Color(0xFFFF6B6B), Color(0xFFFF9F43)]),
+            borderRadius: BorderRadius.vertical(bottom: Radius.circular(36)),
+          ),
+        ),
+        const Expanded(
+          child: Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                CircularProgressIndicator(color: AppTheme.accent),
+                SizedBox(height: 16),
+                Text('Loading practice... 🎮',
+                    style: TextStyle(
+                      fontFamily: 'Nunito',
+                      fontWeight: FontWeight.w600,
+                      color: Colors.grey,
+                    )),
+              ],
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
