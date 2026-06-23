@@ -5,9 +5,11 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 class ApiService {
   static const String _baseUrlKey = 'api_base_url';
+  static const String _cookieKey = 'session_cookie';
 
   String _baseUrl = '';
   String? _token;
+  String? _sessionCookie;
   String? get token => _token;
 
   static final ApiService _instance = ApiService._();
@@ -18,6 +20,7 @@ class ApiService {
     final prefs = await SharedPreferences.getInstance();
     _baseUrl = prefs.getString(_baseUrlKey) ?? dotenv.env['API_BASE_URL'] ?? 'https://novamymentor.cloud/api';
     _token = prefs.getString('auth_token');
+    _sessionCookie = prefs.getString(_cookieKey);
   }
 
   String get baseUrl => _baseUrl;
@@ -29,7 +32,7 @@ class ApiService {
 
   Map<String, String> get _headers => {
     'Content-Type': 'application/json',
-    if (_token != null) 'Authorization': 'Bearer $_token',
+    if (_sessionCookie != null) 'Cookie': _sessionCookie!,
   };
 
   Future<void> setToken(String? token) async {
@@ -42,12 +45,35 @@ class ApiService {
     }
   }
 
+  Future<void> _saveCookie(String? cookie) async {
+    _sessionCookie = cookie;
+    final prefs = await SharedPreferences.getInstance();
+    if (cookie != null) {
+      await prefs.setString(_cookieKey, cookie);
+    } else {
+      await prefs.remove(_cookieKey);
+    }
+  }
+
+  Future<void> clearSession() async {
+    _sessionCookie = null;
+    _token = null;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_cookieKey);
+    await prefs.remove('auth_token');
+  }
+
   Future<Map<String, dynamic>> login(String username, String password) async {
     final response = await http.post(
       Uri.parse('$_baseUrl/login'),
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode({'username': username, 'password': password}),
     );
+    final cookie = response.headers['set-cookie'];
+    if (cookie != null) {
+      final parsed = cookie.split(';').first;
+      await _saveCookie(parsed);
+    }
     return jsonDecode(response.body);
   }
 
@@ -109,8 +135,9 @@ class ApiService {
   }
 
   Future<Map<String, dynamic>> getStudyPlan(String username) async {
+    final now = DateTime.now();
     final response = await http.get(
-      Uri.parse('$_baseUrl/study-planner/get-plans?username=$username'),
+      Uri.parse('$_baseUrl/study-planner/get-plans?username=$username&year=${now.year}&month=${now.month}'),
       headers: _headers,
     );
     return jsonDecode(response.body);

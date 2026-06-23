@@ -21,18 +21,15 @@ class AuthProvider extends ChangeNotifier {
     try {
       final data = await _api.login(username, password);
       if (data['success'] == true) {
-        final token = data['token'] ?? data['access_token'] ?? data['session_id'];
-        await _api.setToken(token);
-        final userFields = data['user'] ?? data;
         try {
           final sessionData = await _api.getSession();
           if (sessionData['success'] == true) {
-            _user = User.fromJson({...sessionData, 'token': token});
+            _user = User.fromJson(sessionData);
           } else {
-            _user = User.fromJson({...userFields, 'username': username, 'token': token});
+            _user = User.fromJson({'username': username, 'name': username, 'role': data['role'] ?? 'student'});
           }
         } catch (_) {
-          _user = User.fromJson({...userFields, 'username': username, 'token': token});
+          _user = User.fromJson({'username': username, 'name': username, 'role': data['role'] ?? 'student'});
         }
         _loading = false;
         notifyListeners();
@@ -52,7 +49,6 @@ class AuthProvider extends ChangeNotifier {
 
   Future<bool> restoreSession() async {
     await _api.init();
-    if (_api.token == null) return false;
 
     try {
       final data = await _api.getSession();
@@ -63,13 +59,13 @@ class AuthProvider extends ChangeNotifier {
       }
     } catch (_) {}
 
-    await _api.setToken(null);
+    await _api.clearSession();
     return false;
   }
 
   Future<void> logout() async {
     _user = null;
-    await _api.setToken(null);
+    await _api.clearSession();
     notifyListeners();
   }
 
