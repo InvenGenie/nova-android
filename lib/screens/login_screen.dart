@@ -63,13 +63,16 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                 children: [
                   const SizedBox(height: 60),
                   Container(
-                    width: 64,
-                    height: 64,
+                    width: 80,
+                    height: 80,
                     decoration: BoxDecoration(
                       color: AppTheme.primary.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(18),
+                      borderRadius: BorderRadius.circular(20),
                     ),
-                    child: Icon(Icons.auto_awesome, color: AppTheme.primary, size: 32),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(20),
+                      child: Image.asset('assets/images/logo.png', fit: BoxFit.cover),
+                    ),
                   ),
                   const SizedBox(height: 32),
                   Text('Welcome back', style: Theme.of(context).textTheme.headlineLarge),

@@ -90,8 +90,10 @@ class _StudentDashboardState extends State<StudentDashboard> {
                   ),
                   CircleAvatar(
                     radius: 26,
-                    backgroundColor: AppTheme.primary.withValues(alpha: 0.1),
-                    child: Text(user.name.isNotEmpty ? user.name[0].toUpperCase() : '?', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w700, color: AppTheme.primary)),
+                    backgroundColor: Colors.white,
+                    child: ClipOval(
+                      child: Image.asset('assets/images/logo.png', fit: BoxFit.cover, width: 52, height: 52),
+                    ),
                   ),
                 ],
               ),

@@ -21,14 +21,21 @@ class AuthProvider extends ChangeNotifier {
     try {
       final data = await _api.login(username, password);
       if (data['success'] == true) {
-        final sessionData = await _api.getSession();
-        if (sessionData['success'] == true) {
-          _user = User.fromJson({...sessionData, 'token': data['token']});
-          await _api.setToken(data['token']);
-          _loading = false;
-          notifyListeners();
-          return true;
+        final token = data['token'] ?? data['access_token'] ?? data['session_id'];
+        await _api.setToken(token);
+        try {
+          final sessionData = await _api.getSession();
+          if (sessionData['success'] == true) {
+            _user = User.fromJson({...sessionData, 'token': token});
+          } else {
+            _user = User.fromJson({'username': username, 'name': username, 'role': 'student', 'token': token});
+          }
+        } catch (_) {
+          _user = User.fromJson({'username': username, 'name': username, 'role': 'student', 'token': token});
         }
+        _loading = false;
+        notifyListeners();
+        return true;
       }
       _error = data['message'] ?? 'Login failed';
       _loading = false;
