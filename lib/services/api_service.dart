@@ -101,7 +101,7 @@ class ApiService {
 
   Future<Map<String, dynamic>> getStudyPlan(String username) async {
     final response = await http.get(
-      Uri.parse('$_baseUrl/study_plan/$username'),
+      Uri.parse('$_baseUrl/study-planner/get-plans?username=$username'),
       headers: _headers,
     );
     return jsonDecode(response.body);
@@ -109,7 +109,7 @@ class ApiService {
 
   Future<Map<String, dynamic>> saveStudyPlan(Map<String, dynamic> data) async {
     final response = await http.post(
-      Uri.parse('$_baseUrl/save_study_plan'),
+      Uri.parse('$_baseUrl/study-planner/save-plan'),
       headers: _headers,
       body: jsonEncode(data),
     );
@@ -136,7 +136,7 @@ class ApiService {
 
   Future<Map<String, dynamic>> getWeeklyReport(String username) async {
     final response = await http.get(
-      Uri.parse('$_baseUrl/parent/weekly_report/$username'),
+      Uri.parse('$_baseUrl/parent/weekly-report-data?username=$username'),
       headers: _headers,
     );
     return jsonDecode(response.body);
