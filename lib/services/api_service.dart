@@ -18,7 +18,7 @@ class ApiService {
 
   Future<void> init() async {
     final prefs = await SharedPreferences.getInstance();
-    _baseUrl = prefs.getString(_baseUrlKey) ?? dotenv.env['API_BASE_URL'] ?? 'https://novamymentor.cloud/api';
+    _baseUrl = prefs.getString(_baseUrlKey) ?? dotenv.env['API_BASE_URL'] ?? 'https://novamymentor.cloud/nova-api';
     _token = prefs.getString('auth_token');
     _sessionCookie = prefs.getString(_cookieKey);
   }
