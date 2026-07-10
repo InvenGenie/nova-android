@@ -30,17 +30,22 @@ jobs:
       - name: Build APK
         run: flutter build apk --release
 
+      - name: Rename APK
+        run: |
+          mv build/app/outputs/flutter-apk/app-release.apk \
+             build/app/outputs/flutter-apk/nova-android-v1.0.0-build-${{ github.run_number }}.apk
+
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: nova-android-release
-          path: build/app/outputs/flutter-apk/app-release.apk
+          path: build/app/outputs/flutter-apk/nova-android-v1.0.0-build-${{ github.run_number }}.apk
 
       - name: Create Release
         run: |
           gh release create "v1.0.0-build-${{ github.run_number }}" \
             --title "Build #${{ github.run_number }}" \
-            --notes "Auto-built from main." \
-            build/app/outputs/flutter-apk/app-release.apk
+            --notes "Auto-built Nova Android APK." \
+            build/app/outputs/flutter-apk/nova-android-v1.0.0-build-${{ github.run_number }}.apk
         env:
           GH_TOKEN: ${{ github.token }}
