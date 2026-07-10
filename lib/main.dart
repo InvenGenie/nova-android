@@ -59,9 +59,17 @@ class NovaApp extends StatelessWidget {
                     ),
                   );
                 case '/practice':
-                  return MaterialPageRoute(builder: (_) => const PracticeScreen());
+                  return MaterialPageRoute(
+                    builder: (_) => PracticeScreen(
+                      args: settings.arguments as Map<String, dynamic>?,
+                    ),
+                  );
                 case '/quiz':
-                  return MaterialPageRoute(builder: (_) => const QuizScreen());
+                  return MaterialPageRoute(
+                    builder: (_) => QuizScreen(
+                      args: settings.arguments as Map<String, dynamic>?,
+                    ),
+                  );
                 case '/profile':
                   return MaterialPageRoute(builder: (_) => const ProfileScreen());
                 case '/report':

@@ -23,8 +23,20 @@ class _StudyScreenState extends State<StudyScreen> {
   final _api = ApiService();
   List<Lesson> _lessons = [];
   Lesson? _selectedLesson;
+  String? _selectedContent;
   bool _loading = true;
   bool _loadingContent = false;
+
+  String _boardName(int id) {
+    switch (id) {
+      case 2:
+        return 'ICSE';
+      case 3:
+        return 'IB';
+      default:
+        return 'CBSE';
+    }
+  }
 
   @override
   void initState() {
@@ -61,22 +73,24 @@ class _StudyScreenState extends State<StudyScreen> {
   Future<void> _selectLesson(Lesson lesson) async {
     setState(() {
       _selectedLesson = lesson;
+      _selectedContent = null;
       _loadingContent = true;
     });
     try {
-      if (lesson.content == null) {
-        final data = await _api.getLessons(1, 1, 1, widget.subjectId ?? 10);
-        if (mounted) {
-          final match = data.whereType<Map<String, dynamic>>().firstWhere(
-            (l) => l['lesson_id'] == lesson.lessonId || l['id'] == lesson.lessonId,
-            orElse: () => <String, dynamic>{},
-          );
-          if (match.isNotEmpty) {
-            _selectedLesson = Lesson.fromJson(match);
-          }
-        }
-      }
-    } catch (_) {}
+      final user = context.read<AuthProvider>().user;
+      final classNum =
+          (user?.userClass ?? '').replaceAll(RegExp(r'[^\d]'), '');
+      final content = await _api.getLessonContent(
+        chapter: lesson.lessonName,
+        subject: widget.subjectName,
+        board: _boardName(widget.boardId ?? 1),
+        lessonClass: classNum.isNotEmpty ? classNum : null,
+        publication: 'NCERT',
+      );
+      if (mounted) _selectedContent = content;
+    } catch (_) {
+      if (mounted) _selectedContent = '';
+    }
     if (mounted) setState(() => _loadingContent = false);
   }
 
@@ -168,7 +182,9 @@ class _StudyScreenState extends State<StudyScreen> {
   }
 
   Widget _buildLessonContent() {
-    final content = _selectedLesson!.content;
+    final content = _selectedContent;
+    final hasContent = content != null && content.isNotEmpty;
+    final safeContent = content ?? '';
     return SingleChildScrollView(
       padding: const EdgeInsets.all(24),
       child: Column(
@@ -176,8 +192,8 @@ class _StudyScreenState extends State<StudyScreen> {
         children: [
           Text(_selectedLesson!.lessonName, style: Theme.of(context).textTheme.headlineMedium),
           const SizedBox(height: 20),
-          if (content != null && content.isNotEmpty)
-            Text(content, style: Theme.of(context).textTheme.bodyLarge?.copyWith(height: 1.7))
+          if (hasContent)
+            Text(safeContent, style: Theme.of(context).textTheme.bodyLarge?.copyWith(height: 1.7))
           else
             Container(
               width: double.infinity,
@@ -201,11 +217,12 @@ class _StudyScreenState extends State<StudyScreen> {
             children: [
               Expanded(
                 child: ElevatedButton.icon(
-                  onPressed: content != null && content.isNotEmpty
+                  onPressed: hasContent
                       ? () {
                           Navigator.pushNamed(context, '/practice', arguments: {
                             'subject_id': widget.subjectId,
                             'subject_name': widget.subjectName,
+                            'lesson_name': _selectedLesson!.lessonName,
                             'lesson_id': _selectedLesson!.lessonId,
                           });
                         }
@@ -217,7 +234,13 @@ class _StudyScreenState extends State<StudyScreen> {
               const SizedBox(width: 12),
               Expanded(
                 child: OutlinedButton.icon(
-                  onPressed: () {},
+                  onPressed: () {
+                    Navigator.pushNamed(context, '/quiz', arguments: {
+                      'subject_id': widget.subjectId,
+                      'subject_name': widget.subjectName,
+                      'lesson_name': _selectedLesson!.lessonName,
+                    });
+                  },
                   icon: const Icon(Icons.assessment_outlined),
                   label: const Text('Take Quiz'),
                   style: OutlinedButton.styleFrom(

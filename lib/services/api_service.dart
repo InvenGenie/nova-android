@@ -177,4 +177,110 @@ class ApiService {
     );
     return jsonDecode(response.body);
   }
+
+  // ---- Session payload expected by the New-Nova AI lesson endpoints ----
+  Map<String, dynamic> _buildSession({
+    String? subject,
+    String? lesson,
+    String? board,
+    String? lessonClass,
+    String? publication,
+  }) =>
+      {
+        'selected_lesson': lesson,
+        'selected_subject': subject,
+        'syllabus': board ?? 'CBSE',
+        'class': lessonClass,
+        'publication': publication ?? 'NCERT',
+      };
+
+  String _stripMarkers(String text) => text
+      .replaceAll(RegExp(r'__SOURCE__:[^\n]*\n?', caseSensitive: false), '')
+      .replaceAll(RegExp(r'__METRICS__:[^\n]*\n?', caseSensitive: false), '')
+      .replaceAll(RegExp(r'__SESSION__:[^\n]*\n?', caseSensitive: false), '')
+      .trim();
+
+  // ---- Lesson content (SCRUM-503, path 1: live AI summary) ----
+  // Falls back server-side to model knowledge when no Material file exists.
+  Future<String> getLessonContent({
+    required String chapter,
+    String? subject,
+    String? board,
+    String? lessonClass,
+    String? publication,
+  }) async {
+    final response = await http.post(
+      Uri.parse('$_baseUrl/lesson/generate_summary'),
+      headers: _headers,
+      body: jsonEncode({
+        'chapter': chapter,
+        'subject': subject,
+        'board': board ?? 'CBSE',
+        'class': lessonClass,
+        'publication': publication ?? 'NCERT',
+        'session': _buildSession(
+          subject: subject,
+          lesson: chapter,
+          board: board,
+          lessonClass: lessonClass,
+          publication: publication,
+        ),
+      }),
+    );
+    final body = jsonDecode(response.body);
+    final summary = body['summary'] ?? '';
+    return _stripMarkers(summary is String ? summary : '');
+  }
+
+  // ---- Quiz generation (clean JSON) ----
+  Future<Map<String, dynamic>> getQuiz({
+    required String lessonName,
+    String? subject,
+    String? board,
+    String? lessonClass,
+    String? publication,
+  }) async {
+    final response = await http.post(
+      Uri.parse('$_baseUrl/lesson/generate_quiz'),
+      headers: _headers,
+      body: jsonEncode({
+        'summary': null,
+        'session': _buildSession(
+          subject: subject,
+          lesson: lessonName,
+          board: board,
+          lessonClass: lessonClass,
+          publication: publication,
+        ),
+      }),
+    );
+    return jsonDecode(response.body);
+  }
+
+  // ---- Practice questions (streamed plain text) ----
+  Future<String> getPracticeQuestions({
+    required String lessonName,
+    int numQuestions = 5,
+    String? subject,
+    String? board,
+    String? lessonClass,
+    String? publication,
+  }) async {
+    final request = http.Request('POST', Uri.parse('$_baseUrl/lesson/practice_stream'));
+    request.headers.addAll(_headers);
+    request.body = jsonEncode({
+      'lesson_name': lessonName,
+      'num_questions': numQuestions,
+      'session': _buildSession(
+        subject: subject,
+        lesson: lessonName,
+        board: board,
+        lessonClass: lessonClass,
+        publication: publication,
+      ),
+    });
+    final streamed = await request.send();
+    final body = await streamed.stream.transform(utf8.decoder).join();
+    return _stripMarkers(body);
+  }
 }
