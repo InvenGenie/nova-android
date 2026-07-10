@@ -200,8 +200,9 @@ class ApiService {
       .replaceAll(RegExp(r'__SESSION__:[^\n]*\n?', caseSensitive: false), '')
       .trim();
 
-  // ---- Lesson content (SCRUM-503, path 1: live AI summary) ----
-  // Falls back server-side to model knowledge when no Material file exists.
+  // ---- Lesson content (SCRUM-512, path 2: direct DB retrieval) ----
+  // Fetches the stored textbook content straight from the `lesson_materials`
+  // database table — fast, authoritative, shared with the web app. No AI.
   Future<String> getLessonContent({
     required String chapter,
     String? subject,
@@ -210,7 +211,7 @@ class ApiService {
     String? publication,
   }) async {
     final response = await http.post(
-      Uri.parse('$_baseUrl/lesson/generate_summary'),
+      Uri.parse('$_baseUrl/lesson/content'),
       headers: _headers,
       body: jsonEncode({
         'chapter': chapter,
@@ -227,9 +228,12 @@ class ApiService {
         ),
       }),
     );
+    if (response.statusCode == 404) {
+      return '';
+    }
     final body = jsonDecode(response.body);
-    final summary = body['summary'] ?? '';
-    return _stripMarkers(summary is String ? summary : '');
+    final content = body['content'] ?? '';
+    return _stripMarkers(content is String ? content : '');
   }
 
   // ---- Quiz generation (clean JSON) ----
