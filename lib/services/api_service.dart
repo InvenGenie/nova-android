@@ -21,6 +21,7 @@ class ApiService {
     _baseUrl = prefs.getString(_baseUrlKey) ?? dotenv.env['API_BASE_URL'] ?? 'https://novamymentor.cloud/nova-api';
     _token = prefs.getString('auth_token');
     _sessionCookie = prefs.getString(_cookieKey);
+    await _loadPersistedCache();
   }
 
   String get baseUrl => _baseUrl;
@@ -94,31 +95,69 @@ class ApiService {
     return <dynamic>[];
   }
 
+  // ---- Local cache: keeps subjects/classes instant after first load ----
+  static final Map<String, List<dynamic>> _memCache = {};
+  static final Map<String, DateTime> _memCacheTs = {};
+  static const String _prefPrefix = 'nova_cache_';
+
+  String _subjectsKey({int? board, int? classId, int? pub}) =>
+      'subjects_${board ?? 0}_${classId ?? 0}_${pub ?? 0}';
+
+  List<dynamic>? getCachedClasses() => _memCache['classes'];
+  List<dynamic>? getCachedSubjects({int? board, int? classId, int? pub}) =>
+      _memCache[_subjectsKey(board: board, classId: classId, pub: pub)];
+
+  Future<void> _storeCache(String key, List<dynamic> data) async {
+    _memCache[key] = data;
+    _memCacheTs[key] = DateTime.now();
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_prefPrefix + key, jsonEncode(data));
+    } catch (_) {}
+  }
+
+  Future<void> _loadPersistedCache() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      for (final key in prefs.getKeys().where((k) => k.startsWith(_prefPrefix))) {
+        final raw = prefs.getString(key);
+        if (raw == null) continue;
+        final data = jsonDecode(raw) as List<dynamic>;
+        final memKey = key.substring(_prefPrefix.length);
+        _memCache.putIfAbsent(memKey, () => data);
+      }
+    } catch (_) {}
+  }
+
+  Future<List<dynamic>> _cachedGet(String key, String path, String listKey) async {
+    final response = await http.get(Uri.parse('$_baseUrl$path'), headers: _headers);
+    final list = _extractList(jsonDecode(response.body), listKey);
+    await _storeCache(key, list);
+    return list;
+  }
+
   Future<List<dynamic>> getSubjects({int? board, int? classId, int? pub}) async {
     final params = <String, String>{};
     if (board != null) params['board'] = board.toString();
     if (classId != null) params['class'] = classId.toString();
     if (pub != null) params['pub'] = pub.toString();
 
+    final key = _subjectsKey(board: board, classId: classId, pub: pub);
     final uri = Uri.parse('$_baseUrl/get_subjects').replace(queryParameters: params.isNotEmpty ? params : null);
     final response = await http.get(uri, headers: _headers);
-    return _extractList(jsonDecode(response.body), 'subjects');
+    final list = _extractList(jsonDecode(response.body), 'subjects');
+    await _storeCache(key, list);
+    return list;
   }
 
-  Future<List<dynamic>> getBoards() async {
-    final response = await http.get(Uri.parse('$_baseUrl/get_boards'), headers: _headers);
-    return _extractList(jsonDecode(response.body), 'boards');
-  }
+  Future<List<dynamic>> getBoards() async =>
+      _cachedGet('boards', '/get_boards', 'boards');
 
-  Future<List<dynamic>> getClasses() async {
-    final response = await http.get(Uri.parse('$_baseUrl/get_classes'), headers: _headers);
-    return _extractList(jsonDecode(response.body), 'classes');
-  }
+  Future<List<dynamic>> getClasses() async =>
+      _cachedGet('classes', '/get_classes', 'classes');
 
-  Future<List<dynamic>> getPublications() async {
-    final response = await http.get(Uri.parse('$_baseUrl/get_publications'), headers: _headers);
-    return _extractList(jsonDecode(response.body), 'publications');
-  }
+  Future<List<dynamic>> getPublications() async =>
+      _cachedGet('publications', '/get_publications', 'publications');
 
   Future<List<dynamic>> getLessons(int board, int classId, int pub, int subjectId) async {
     final response = await http.get(

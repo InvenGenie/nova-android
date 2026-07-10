@@ -20,6 +20,7 @@ class _SubjectsScreenState extends State<SubjectsScreen>
   String _error = '';
   List<Map<String, dynamic>> _classes = [];
   late AnimationController _animController;
+  bool _animated = false;
 
   @override
   void initState() {
@@ -35,47 +36,67 @@ class _SubjectsScreenState extends State<SubjectsScreen>
     super.dispose();
   }
 
+  int _resolveClassId(List<dynamic> classesData, String? userClass) {
+    Map<String, dynamic>? matchedClass;
+    for (final c in classesData) {
+      if (c is! Map) continue;
+      final name = (c['class_name'] as String? ?? '')
+          .toLowerCase()
+          .replaceAll(RegExp(r'[^\d]'), '');
+      final userCls =
+          (userClass ?? '').toLowerCase().replaceAll(RegExp(r'[^\d]'), '');
+      if (name == userCls) {
+        matchedClass = c as Map<String, dynamic>;
+        break;
+      }
+    }
+    return matchedClass?['class_id'] ??
+        (classesData.isNotEmpty && classesData[0] is Map
+            ? classesData[0]['class_id']
+            : 1);
+  }
+
+  void _applySubjects(List<dynamic> subjectsData, List<dynamic> classesData) {
+    if (!mounted) return;
+    setState(() {
+      _subjects = subjectsData
+          .map((s) => s is Map<String, dynamic>
+              ? Subject.fromJson(s)
+              : Subject(subjectId: 0, subjectName: ''))
+          .toList();
+      _classes = classesData.whereType<Map<String, dynamic>>().toList();
+      _loading = false;
+    });
+    if (!_animated) {
+      _animController.forward();
+      _animated = true;
+    }
+  }
+
   Future<void> _initData() async {
     final user = context.read<AuthProvider>().user;
     if (user == null) return;
 
+    // Cache-first: show instantly from local cache if previously loaded
+    final cachedClasses = _api.getCachedClasses();
+    if (cachedClasses != null) {
+      final classId = _resolveClassId(cachedClasses, user.userClass);
+      final cachedSubjects =
+          _api.getCachedSubjects(board: 1, classId: classId, pub: 1);
+      if (cachedSubjects != null) {
+        _applySubjects(cachedSubjects, cachedClasses);
+      }
+    }
+
+    // Background refresh from network (keeps data current)
     try {
       final classesData = await _api.getClasses();
-      final userClass = user.userClass;
-      Map<String, dynamic>? matchedClass;
-      for (final c in classesData) {
-        if (c is! Map) continue;
-        final name = (c['class_name'] as String? ?? '')
-            .toLowerCase()
-            .replaceAll(RegExp(r'[^\d]'), '');
-        final userCls =
-            (userClass ?? '').toLowerCase().replaceAll(RegExp(r'[^\d]'), '');
-        if (name == userCls) {
-          matchedClass = c as Map<String, dynamic>;
-          break;
-        }
-      }
-      final classId = matchedClass?['class_id'] ??
-          (classesData.isNotEmpty && classesData[0] is Map
-              ? classesData[0]['class_id']
-              : 1);
-
-      final subjectsData = await _api.getSubjects(board: 1, classId: classId, pub: 1);
-      if (mounted) {
-        setState(() {
-          _subjects = subjectsData
-              .map((s) => s is Map<String, dynamic>
-                  ? Subject.fromJson(s)
-                  : Subject(subjectId: 0, subjectName: ''))
-              .toList();
-          _classes =
-              classesData.whereType<Map<String, dynamic>>().toList();
-          _loading = false;
-        });
-        _animController.forward();
-      }
+      final classId = _resolveClassId(classesData, user.userClass);
+      final subjectsData =
+          await _api.getSubjects(board: 1, classId: classId, pub: 1);
+      _applySubjects(subjectsData, classesData);
     } catch (e) {
-      if (mounted) {
+      if (mounted && _subjects.isEmpty) {
         setState(() {
           _error = e.toString();
           _loading = false;
