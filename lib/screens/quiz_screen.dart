@@ -4,6 +4,7 @@ import '../providers/auth_provider.dart';
 import '../services/api_service.dart';
 import '../models/subject.dart';
 import '../theme/app_theme.dart';
+import '../widgets/explanation_sheet.dart';
 
 class QuizScreen extends StatefulWidget {
   final Map<String, dynamic>? args;
@@ -262,6 +263,32 @@ class _QuizScreenState extends State<QuizScreen> {
                   fontFamily: 'Nunito', color: Color(0xFF1A0A3E))),
           const SizedBox(height: 12),
           ...options.map((opt) => _optionTile(opt.key, opt.value, answer)),
+          const SizedBox(height: 14),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: () => showExplanationSheet(
+                context: context,
+                api: _api,
+                username: context.read<AuthProvider>().user?.username ?? '',
+                title: 'Explain Q${index + 1}',
+                kind: 'quiz',
+                question: question,
+                correctOption: answer,
+                subject: _activeSubject?.subjectName,
+                chapter: _lessonName,
+                class_: _classNum().isNotEmpty ? _classNum() : null,
+                board: 'CBSE',
+                publication: 'NCERT',
+              ),
+              icon: const Icon(Icons.lightbulb_outline, size: 18),
+              label: const Text('Explain this answer'),
+              style: OutlinedButton.styleFrom(
+                minimumSize: const Size(double.infinity, 46),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+              ),
+            ),
+          ),
         ],
       ),
     );

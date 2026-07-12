@@ -326,4 +326,91 @@ class ApiService {
     final body = await streamed.stream.transform(utf8.decoder).join();
     return _stripMarkers(body);
   }
+
+  // ---- Explanation (Android-exclusive, cache-first) ----
+  // Shows a stored explanation when one exists (server OR local cache); only
+  // calls the AI when none is stored or when force=true (student pressed
+  // "Re-explain"). Mirrors the agreed design: stored explanations first, AI last.
+  Future<Map<String, dynamic>> getExplanation({
+    required String username,
+    required String kind,
+    String? topic,
+    String? subject,
+    String? chapter,
+    String? question,
+    String? correctOption,
+    String? class_,
+    String? board,
+    String? publication,
+    bool force = false,
+  }) async {
+    final cacheKey = _explanationKey(
+        username, kind, topic, subject, chapter, question, correctOption, class_, board, publication);
+    if (!force) {
+      final local = await _loadLocalExplanation(cacheKey);
+      if (local != null && local.isNotEmpty) {
+        return {'explanation': local, 'cached': true, 'source': 'local'};
+      }
+    }
+    final response = await http.post(
+      Uri.parse('$_baseUrl/lesson/android/explanation'),
+      headers: _headers,
+      body: jsonEncode({
+        'username': username,
+        'kind': kind,
+        'topic': topic,
+        'subject': subject,
+        'chapter': chapter,
+        'question': question,
+        'correct_option': correctOption,
+        'class_': class_,
+        'board': board,
+        'publication': publication,
+        'force': force,
+      }),
+    );
+    final body = jsonDecode(response.body) as Map<String, dynamic>;
+    final explanation = (body['explanation'] ?? '').toString();
+    if (explanation.isNotEmpty) {
+      await _saveLocalExplanation(cacheKey, explanation);
+    }
+    return {'explanation': explanation, 'cached': body['cached'] ?? false, 'source': 'server'};
+  }
+
+  String _explanationKey(
+    String username,
+    String kind,
+    String? topic,
+    String? subject,
+    String? chapter,
+    String? question,
+    String? correctOption,
+    String? class_,
+    String? board,
+    String? publication,
+  ) {
+    final raw = '$username|$kind|${subject ?? ''}|${class_ ?? ''}|${board ?? ''}'
+        '|${topic ?? ''}|${chapter ?? ''}|${question ?? ''}|${correctOption ?? ''}';
+    var hash = 0;
+    for (var i = 0; i < raw.length; i++) {
+      hash = (hash * 31 + raw.codeUnitAt(i)) & 0x7FFFFFFF;
+    }
+    return 'nova_expl_${hash.toRadixString(16)}';
+  }
+
+  Future<String?> _loadLocalExplanation(String key) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getString(key);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> _saveLocalExplanation(String key, String value) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(key, value);
+    } catch (_) {}
+  }
 }

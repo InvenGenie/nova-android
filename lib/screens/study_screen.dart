@@ -4,6 +4,7 @@ import '../services/api_service.dart';
 import '../models/lesson.dart';
 import '../providers/auth_provider.dart';
 import '../theme/app_theme.dart';
+import '../widgets/explanation_sheet.dart';
 
 class StudyScreen extends StatefulWidget {
   final int? subjectId;
@@ -250,7 +251,32 @@ class _StudyScreenState extends State<StudyScreen> {
                 ),
               ),
             ],
-          ),
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: () => showExplanationSheet(
+                  context: context,
+                  api: _api,
+                  username: context.read<AuthProvider>().user?.username ?? '',
+                  title: 'Explain: ${_selectedLesson!.lessonName}',
+                  kind: 'topic',
+                  topic: _selectedLesson!.lessonName,
+                  subject: widget.subjectName,
+                  chapter: _selectedLesson!.lessonName,
+                  class_: (context.read<AuthProvider>().user?.userClass ?? '').replaceAll(RegExp(r'[^\d]'), ''),
+                  board: _boardName(widget.boardId ?? 1),
+                  publication: 'NCERT',
+                ),
+                icon: const Icon(Icons.lightbulb_outline),
+                label: const Text('Explain this lesson'),
+                style: OutlinedButton.styleFrom(
+                  minimumSize: const Size(double.infinity, 52),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                ),
+              ),
+            ),
+          ],
         ],
       ),
     );
