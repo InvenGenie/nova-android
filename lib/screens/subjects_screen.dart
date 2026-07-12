@@ -21,6 +21,8 @@ class _SubjectsScreenState extends State<SubjectsScreen>
   List<Map<String, dynamic>> _classes = [];
   late AnimationController _animController;
   bool _animated = false;
+  // Real per-subject progress from weekly report
+  Map<String, double> _subjectProgress = {};
 
   @override
   void initState() {
@@ -98,10 +100,31 @@ class _SubjectsScreenState extends State<SubjectsScreen>
     } catch (e) {
       if (mounted && _subjects.isEmpty) {
         setState(() {
-          _error = e.toString();
+          _error = 'Oops! Couldn\'t load your subjects. Check your internet and try again! 🌐';
           _loading = false;
         });
       }
+    }
+
+    // Load real subject progress from weekly report
+    try {
+      final user = context.read<AuthProvider>().user;
+      if (user != null) {
+        final report = await _api.getWeeklyReport(user.username);
+        if (report['subjects'] is List) {
+          final Map<String, double> progress = {};
+          for (final s in report['subjects'] as List) {
+            if (s is Map) {
+              final name = (s['name'] ?? '').toString();
+              final score = (s['score'] as num? ?? 0).toDouble();
+              if (name.isNotEmpty) progress[name.toLowerCase()] = score / 100;
+            }
+          }
+          if (mounted) setState(() => _subjectProgress = progress);
+        }
+      }
+    } catch (_) {
+      // Progress is cosmetic — silently skip if report fails
     }
   }
 
@@ -347,18 +370,41 @@ class _SubjectsScreenState extends State<SubjectsScreen>
                                 fontWeight: FontWeight.w600,
                               )),
                           const SizedBox(height: 10),
-                          // Dummy progress bar
-                          ClipRRect(
-                            borderRadius: BorderRadius.circular(6),
-                            child: LinearProgressIndicator(
-                              value: 0.0,
-                              backgroundColor:
-                                  Colors.white.withValues(alpha: 0.2),
-                              valueColor: const AlwaysStoppedAnimation(
-                                  Colors.white),
-                              minHeight: 5,
-                            ),
-                          ),
+                          // Real progress bar from weekly report
+                          Builder(builder: (ctx) {
+                            final progress = _subjectProgress[
+                                    subject.subjectName.toLowerCase()] ??
+                                0.0;
+                            return Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                ClipRRect(
+                                  borderRadius: BorderRadius.circular(6),
+                                  child: LinearProgressIndicator(
+                                    value: progress,
+                                    backgroundColor:
+                                        Colors.white.withValues(alpha: 0.2),
+                                    valueColor:
+                                        const AlwaysStoppedAnimation(Colors.white),
+                                    minHeight: 5,
+                                  ),
+                                ),
+                                if (progress > 0)
+                                  Padding(
+                                    padding: const EdgeInsets.only(top: 4),
+                                    child: Text(
+                                      '${(progress * 100).toStringAsFixed(0)}% score this week',
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        color: Colors.white.withValues(alpha: 0.8),
+                                        fontFamily: 'Nunito',
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                            );
+                          }),
                         ],
                       ),
                     ),

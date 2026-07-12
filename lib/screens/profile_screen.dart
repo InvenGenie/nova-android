@@ -1,12 +1,75 @@
 import 'package:flutter/material.dart';
 import 'dart:math' as math;
 import 'package:provider/provider.dart';
+import 'package:shimmer/shimmer.dart';
 import '../providers/auth_provider.dart';
 import '../providers/theme_provider.dart';
 import '../theme/app_theme.dart';
+import '../services/api_service.dart';
 
-class ProfileScreen extends StatelessWidget {
+class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
+
+  @override
+  State<ProfileScreen> createState() => _ProfileScreenState();
+}
+
+class _ProfileScreenState extends State<ProfileScreen> {
+  List<Map<String, String>> _earnedBadges = [];
+  bool _loadingBadges = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadBadges();
+  }
+
+  Future<void> _loadBadges() async {
+    final user = context.read<AuthProvider>().user;
+    if (user == null) return;
+
+    setState(() => _loadingBadges = true);
+    try {
+      final report = await ApiService().getWeeklyReport(user.username);
+      final earned = <Map<String, String>>[];
+
+      // streak >= 3 days
+      final streak = report['streak'];
+      if (streak != null && (streak as num) >= 3) {
+        earned.add({'emoji': '🔥', 'label': 'On Fire'});
+      }
+
+      // accuracy >= 70
+      final accuracy = report['accuracy'];
+      if (accuracy != null && (accuracy as num) >= 70) {
+        earned.add({'emoji': '🏆', 'label': 'Champion'});
+      }
+
+      // total_queries >= 20
+      final totalQueries = report['total_queries'];
+      if (totalQueries != null && (totalQueries as num) >= 20) {
+        earned.add({'emoji': '🧠', 'label': 'Scholar'});
+      }
+
+      // completion_rate >= 80 (from behaviour key or top-level)
+      final completionRate = report['completion_rate'] ??
+          (report['behaviour'] as Map<String, dynamic>?)?['completion_rate'];
+      if (completionRate != null && (completionRate as num) >= 80) {
+        earned.add({'emoji': '✅', 'label': 'Achiever'});
+      }
+
+      // total_study_time >= 60
+      final studyTime = report['total_study_time'];
+      if (studyTime != null && (studyTime as num) >= 60) {
+        earned.add({'emoji': '⏰', 'label': 'Dedicated'});
+      }
+
+      if (mounted) setState(() => _earnedBadges = earned);
+    } catch (_) {
+      // silently fail — badges section will show empty state
+    }
+    if (mounted) setState(() => _loadingBadges = false);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -183,12 +246,13 @@ class ProfileScreen extends StatelessWidget {
   }
 
   Widget _buildAchievements(BuildContext context) {
-    final badges = [
-      {'emoji': '🔥', 'label': 'On Fire'},
-      {'emoji': '🏆', 'label': 'Champion'},
-      {'emoji': '⚡', 'label': 'Speedy'},
-      {'emoji': '🧠', 'label': 'Smart'},
-      {'emoji': '📚', 'label': 'Scholar'},
+    // Gradient palette for badge tiles
+    const badgeColors = [
+      [AppTheme.primary, AppTheme.accentCyan],
+      [AppTheme.accentOrange, AppTheme.accentYellow],
+      [AppTheme.accentMint, AppTheme.accentCyan],
+      [AppTheme.accentPink, AppTheme.accent],
+      [AppTheme.primary, AppTheme.accentPink],
     ];
 
     return Padding(
@@ -205,54 +269,83 @@ class ProfileScreen extends StatelessWidget {
           const SizedBox(height: 14),
           SizedBox(
             height: 90,
-            child: ListView.builder(
-              scrollDirection: Axis.horizontal,
-              itemCount: badges.length,
-              itemBuilder: (context, i) {
-                final b = badges[i];
-                final colors = [
-                  [AppTheme.primary, AppTheme.accentCyan],
-                  [AppTheme.accentOrange, AppTheme.accentYellow],
-                  [AppTheme.accentMint, AppTheme.accentCyan],
-                  [AppTheme.accentPink, AppTheme.accent],
-                  [AppTheme.primary, AppTheme.accentPink],
-                ];
-                return Container(
-                  width: 72,
-                  margin: const EdgeInsets.only(right: 12),
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                        colors: colors[i % colors.length]),
-                    borderRadius: BorderRadius.circular(20),
-                    boxShadow: [
-                      BoxShadow(
-                        color: colors[i % colors.length][0]
-                            .withValues(alpha: 0.3),
-                        blurRadius: 12,
-                        offset: const Offset(0, 4),
+            child: _loadingBadges
+                ? _buildBadgeShimmer()
+                : _earnedBadges.isEmpty
+                    ? _buildEmptyBadges()
+                    : ListView.builder(
+                        scrollDirection: Axis.horizontal,
+                        itemCount: _earnedBadges.length,
+                        itemBuilder: (context, i) {
+                          final b = _earnedBadges[i];
+                          final colors = badgeColors[i % badgeColors.length];
+                          return Container(
+                            width: 72,
+                            margin: const EdgeInsets.only(right: 12),
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(colors: colors),
+                              borderRadius: BorderRadius.circular(20),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: colors[0].withValues(alpha: 0.3),
+                                  blurRadius: 12,
+                                  offset: const Offset(0, 4),
+                                ),
+                              ],
+                            ),
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Text(b['emoji']!,
+                                    style: const TextStyle(fontSize: 26)),
+                                const SizedBox(height: 4),
+                                Text(b['label']!,
+                                    style: const TextStyle(
+                                      fontSize: 10,
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.w700,
+                                      fontFamily: 'Nunito',
+                                    )),
+                              ],
+                            ),
+                          );
+                        },
                       ),
-                    ],
-                  ),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text(b['emoji']!,
-                          style: const TextStyle(fontSize: 26)),
-                      const SizedBox(height: 4),
-                      Text(b['label']!,
-                          style: const TextStyle(
-                            fontSize: 10,
-                            color: Colors.white,
-                            fontWeight: FontWeight.w700,
-                            fontFamily: 'Nunito',
-                          )),
-                    ],
-                  ),
-                );
-              },
-            ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildBadgeShimmer() {
+    return ListView.builder(
+      scrollDirection: Axis.horizontal,
+      itemCount: 3,
+      itemBuilder: (context, i) => Shimmer.fromColors(
+        baseColor: Colors.grey.shade200,
+        highlightColor: Colors.grey.shade100,
+        child: Container(
+          width: 72,
+          margin: const EdgeInsets.only(right: 12),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(20),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildEmptyBadges() {
+    return Center(
+      child: Text(
+        '🎯 Keep learning to earn badges!',
+        style: TextStyle(
+          fontSize: 14,
+          color: Colors.grey.shade500,
+          fontFamily: 'Nunito',
+          fontWeight: FontWeight.w600,
+        ),
       ),
     );
   }

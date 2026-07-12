@@ -24,6 +24,11 @@ class _StudentDashboardState extends State<StudentDashboard>
   List<StudyPlan> _todayPlans = [];
   bool _loadingPlans = false;
 
+  // Stats state variables
+  String _streak = '—';
+  String _xpToday = '—';
+  String _accuracy = '—';
+
   late AnimationController _headerController;
   late AnimationController _floatController;
   late Animation<double> _headerAnim;
@@ -57,12 +62,42 @@ class _StudentDashboardState extends State<StudentDashboard>
     if (user == null) return;
     setState(() => _loadingPlans = true);
     try {
-      final data = await _api.getStudyPlan(user.username);
-      if (data['success'] == true && data['plans'] != null) {
+      final results = await Future.wait([
+        _api.getStudyPlan(user.username),
+        _api.getWeeklyReport(user.username),
+      ]);
+
+      final planData = results[0];
+      if (planData['success'] == true && planData['plans'] != null) {
         _todayPlans =
-            (data['plans'] as List).map((e) => StudyPlan.fromJson(e)).toList();
+            (planData['plans'] as List).map((e) => StudyPlan.fromJson(e)).toList();
       }
-    } catch (_) {}
+
+      // Map weekly report to stats
+      final report = results[1];
+      final streakVal = report['streak'];
+      final accuracyVal = report['accuracy'];
+      final totalQueries = report['total_queries'];
+
+      if (mounted) {
+        setState(() {
+          _streak = streakVal != null ? '$streakVal 🔥' : '—';
+          _accuracy = accuracyVal != null
+              ? '${(accuracyVal as num).toStringAsFixed(0)}%'
+              : '—';
+          _xpToday = totalQueries != null ? '$totalQueries' : '—';
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Could not load your dashboard. Pull down to refresh! 🔄'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
     if (mounted) setState(() => _loadingPlans = false);
   }
 
@@ -405,9 +440,24 @@ class _StudentDashboardState extends State<StudentDashboard>
 
   Widget _buildStatsStrip() {
     final stats = [
-      {'emoji': '🔥', 'label': 'Streak', 'value': '—', 'color': AppTheme.accent},
-      {'emoji': '⭐', 'label': 'XP Today', 'value': '—', 'color': AppTheme.accentYellow},
-      {'emoji': '🎯', 'label': 'Accuracy', 'value': '—', 'color': AppTheme.accentMint},
+      {
+        'emoji': '🔥',
+        'label': 'Streak',
+        'value': _streak,
+        'color': AppTheme.accent,
+      },
+      {
+        'emoji': '⭐',
+        'label': 'XP Today',
+        'value': _xpToday,
+        'color': AppTheme.accentYellow,
+      },
+      {
+        'emoji': '🎯',
+        'label': 'Accuracy',
+        'value': _accuracy,
+        'color': AppTheme.accentMint,
+      },
     ];
 
     return Padding(
@@ -434,13 +484,24 @@ class _StudentDashboardState extends State<StudentDashboard>
                   Text(s['emoji'] as String,
                       style: const TextStyle(fontSize: 22)),
                   const SizedBox(height: 4),
-                  Text(s['value'] as String,
+                  // AnimatedSwitcher so the value animates in when it loads
+                  AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 400),
+                    transitionBuilder: (child, animation) => FadeTransition(
+                      opacity: animation,
+                      child: ScaleTransition(scale: animation, child: child),
+                    ),
+                    child: Text(
+                      s['value'] as String,
+                      key: ValueKey(s['value']),
                       style: TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.w900,
                         color: s['color'] as Color,
                         fontFamily: 'Nunito',
-                      )),
+                      ),
+                    ),
+                  ),
                   Text(s['label'] as String,
                       style: TextStyle(
                         fontSize: 11,
@@ -605,12 +666,15 @@ class _StudentDashboardState extends State<StudentDashboard>
                     .titleMedium
                     ?.copyWith(color: const Color(0xFF1A0A3E))),
             const SizedBox(height: 6),
-            Text('Tap Subjects to start your adventure',
-                style: TextStyle(
-                  fontSize: 13,
-                  color: Colors.grey.shade500,
-                  fontFamily: 'Nunito',
-                )),
+            Text(
+              'No missions yet! Ask your teacher or tap Subjects to begin your adventure 📚',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 13,
+                color: Colors.grey.shade500,
+                fontFamily: 'Nunito',
+              ),
+            ),
             const SizedBox(height: 20),
             GestureDetector(
               onTap: () => setState(() => _currentIndex = 1),

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
 import '../services/api_service.dart';
@@ -24,6 +25,34 @@ class _QuizScreenState extends State<QuizScreen> {
   List<dynamic>? _questions;
   bool _quizLoading = false;
   String? _quizError;
+
+  // ── Per-question state ─────────────────────────────────────────────────────
+  /// Which option key the child has tapped for each question index.
+  Map<int, String?> _selectedAnswers = {};
+
+  /// Whether the child has pressed "Check Answer" for each question index.
+  Map<int, bool> _submitted = {};
+
+  /// Total correct answers (incremented once per question on submission).
+  int _score = 0;
+
+  // ── Quiz type chip selection ───────────────────────────────────────────────
+  String _selectedType = '10 Qs';
+
+  // ── Helpers ───────────────────────────────────────────────────────────────
+
+  void _resetQuizState() {
+    _selectedAnswers = {};
+    _submitted = {};
+    _score = 0;
+  }
+
+  bool get _allSubmitted {
+    final total = _questions?.length ?? 0;
+    return total > 0 &&
+        _submitted.length == total &&
+        _submitted.values.every((v) => v);
+  }
 
   @override
   void initState() {
@@ -60,11 +89,15 @@ class _QuizScreenState extends State<QuizScreen> {
 
   Future<void> _startQuiz(String lesson, String subjectName) async {
     setState(() {
-      _activeSubject = Subject(subjectId: widget.args?['subject_id'] ?? 0, subjectName: subjectName);
+      _activeSubject = Subject(
+        subjectId: widget.args?['subject_id'] ?? 0,
+        subjectName: subjectName,
+      );
       _lessonName = lesson;
       _quizLoading = true;
       _questions = null;
       _quizError = null;
+      _resetQuizState();
     });
     try {
       final data = await _api.getQuiz(
@@ -73,17 +106,22 @@ class _QuizScreenState extends State<QuizScreen> {
         board: 'CBSE',
         lessonClass: _classNum().isNotEmpty ? _classNum() : null,
         publication: 'NCERT',
+        // Pass selected quiz type so the API can eventually use it.
+        quizType: _selectedType,
       );
       if (mounted) {
         if (data['success'] == false) {
           setState(() {
-            _quizError = data['error']?.toString() ?? 'Could not generate quiz.';
+            _quizError =
+                "Oops! Nova couldn't load the quiz. Check your internet and try again! 🌐";
             _quizLoading = false;
           });
         } else {
           final q = data['questions'] ??
               data['quiz'] ??
-              (data['raw_quiz'] is Map ? data['raw_quiz']['questions'] : null) ??
+              (data['raw_quiz'] is Map
+                  ? data['raw_quiz']['questions']
+                  : null) ??
               (data['raw_quiz'] is List ? data['raw_quiz'] : null);
           setState(() {
             _questions = q is List ? List.from(q) : [];
@@ -91,15 +129,18 @@ class _QuizScreenState extends State<QuizScreen> {
           });
         }
       }
-    } catch (e) {
+    } catch (_) {
       if (mounted) {
         setState(() {
-          _quizError = e.toString();
+          _quizError =
+              "Oops! Nova couldn't load the quiz. Check your internet and try again! 🌐";
           _quizLoading = false;
         });
       }
     }
   }
+
+  // ── Build ──────────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
@@ -118,21 +159,27 @@ class _QuizScreenState extends State<QuizScreen> {
                       if (_subjects.isNotEmpty) ...[
                         SliverToBoxAdapter(
                           child: Padding(
-                            padding: const EdgeInsets.fromLTRB(20, 24, 20, 8),
+                            padding:
+                                const EdgeInsets.fromLTRB(20, 24, 20, 8),
                             child: Row(
                               children: [
-                                const Text('📚 ', style: TextStyle(fontSize: 20)),
+                                const Text('📚 ',
+                                    style: TextStyle(fontSize: 20)),
                                 Text('Pick a Subject',
-                                    style: Theme.of(context).textTheme.titleLarge),
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .titleLarge),
                               ],
                             ),
                           ),
                         ),
                         SliverPadding(
-                          padding: const EdgeInsets.fromLTRB(20, 0, 20, 40),
+                          padding:
+                              const EdgeInsets.fromLTRB(20, 0, 20, 40),
                           sliver: SliverList(
                             delegate: SliverChildBuilderDelegate(
-                              (context, i) => _buildSubjectQuizCard(_subjects[i], i),
+                              (context, i) =>
+                                  _buildSubjectQuizCard(_subjects[i], i),
                               childCount: _subjects.length,
                             ),
                           ),
@@ -144,9 +191,12 @@ class _QuizScreenState extends State<QuizScreen> {
     );
   }
 
+  // ── Session view ───────────────────────────────────────────────────────────
+
   Widget _buildSession() {
     return CustomScrollView(
       slivers: [
+        // Session header
         SliverToBoxAdapter(
           child: Container(
             padding: const EdgeInsets.fromLTRB(20, 56, 20, 24),
@@ -156,13 +206,18 @@ class _QuizScreenState extends State<QuizScreen> {
                 end: Alignment.bottomRight,
                 colors: [Color(0xFF4ECDC4), Color(0xFF6BCB77)],
               ),
-              borderRadius: BorderRadius.vertical(bottom: Radius.circular(36)),
+              borderRadius:
+                  BorderRadius.vertical(bottom: Radius.circular(36)),
             ),
             child: Row(
               children: [
                 GestureDetector(
-                  onTap: () => setState(() => _activeSubject = null),
-                  child: const Icon(Icons.arrow_back, color: Colors.white),
+                  onTap: () => setState(() {
+                    _activeSubject = null;
+                    _resetQuizState();
+                  }),
+                  child:
+                      const Icon(Icons.arrow_back, color: Colors.white),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -170,10 +225,16 @@ class _QuizScreenState extends State<QuizScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       const Text('🏆 Quiz',
-                          style: TextStyle(fontSize: 24, fontWeight: FontWeight.w900,
-                              color: Colors.white, fontFamily: 'Nunito')),
+                          style: TextStyle(
+                              fontSize: 24,
+                              fontWeight: FontWeight.w900,
+                              color: Colors.white,
+                              fontFamily: 'Nunito')),
                       Text(_lessonName ?? '',
-                          style: const TextStyle(fontSize: 14, color: Colors.white, fontFamily: 'Nunito')),
+                          style: const TextStyle(
+                              fontSize: 14,
+                              color: Colors.white,
+                              fontFamily: 'Nunito')),
                     ],
                   ),
                 ),
@@ -181,6 +242,12 @@ class _QuizScreenState extends State<QuizScreen> {
             ),
           ),
         ),
+
+        // Results banner — shown only after all questions answered
+        if (_allSubmitted)
+          SliverToBoxAdapter(child: _buildResultsBanner()),
+
+        // Loading / error / questions
         if (_quizLoading)
           const SliverToBoxAdapter(
             child: Padding(
@@ -194,9 +261,18 @@ class _QuizScreenState extends State<QuizScreen> {
               padding: const EdgeInsets.all(24),
               child: Container(
                 padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(color: Colors.grey.shade100, borderRadius: BorderRadius.circular(20)),
-                child: Text(_quizError!, textAlign: TextAlign.center,
-                    style: const TextStyle(color: Colors.grey)),
+                decoration: BoxDecoration(
+                    color: Colors.grey.shade100,
+                    borderRadius: BorderRadius.circular(20)),
+                child: Text(
+                  _quizError!,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                      fontSize: 15,
+                      color: Colors.grey,
+                      fontFamily: 'Nunito',
+                      fontWeight: FontWeight.w600),
+                ),
               ),
             ),
           )
@@ -205,7 +281,8 @@ class _QuizScreenState extends State<QuizScreen> {
             padding: const EdgeInsets.all(20),
             sliver: SliverList(
               delegate: SliverChildBuilderDelegate(
-                (context, i) => _buildQuestionCard(_questions![i], i),
+                (context, i) =>
+                    _buildQuestionCard(_questions![i], i),
                 childCount: _questions!.length,
               ),
             ),
@@ -214,14 +291,21 @@ class _QuizScreenState extends State<QuizScreen> {
           const SliverToBoxAdapter(
             child: Padding(
               padding: EdgeInsets.all(24),
-              child: Center(child: Text('No questions generated.')),),
+              child: Center(
+                  child: Text('No questions generated.')),
+            ),
           ),
+
+        // Regenerate button
         if (!_quizLoading && _questions != null)
           SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(20, 0, 20, 40),
               child: ElevatedButton.icon(
-                onPressed: () => _startQuiz(_lessonName ?? _activeSubject!.subjectName, _activeSubject!.subjectName),
+                onPressed: () => _startQuiz(
+                  _lessonName ?? _activeSubject!.subjectName,
+                  _activeSubject!.subjectName,
+                ),
                 icon: const Icon(Icons.refresh),
                 label: const Text('Regenerate Quiz'),
               ),
@@ -231,19 +315,131 @@ class _QuizScreenState extends State<QuizScreen> {
     );
   }
 
-  Widget _buildQuestionCard(dynamic raw, int index) {
-    final q = raw is Map ? Map<String, dynamic>.from(raw) : <String, dynamic>{};
+  // ── Results banner ─────────────────────────────────────────────────────────
+
+  Widget _buildResultsBanner() {
+    final total = _questions!.length;
+    final pct = total > 0 ? _score / total : 0.0;
+    final passed = pct >= 0.7;
+
+    String emoji;
+    String message;
+    if (pct == 1.0) {
+      emoji = '🏆';
+      message = "Perfect score! You're a genius!";
+    } else if (pct >= 0.7) {
+      emoji = '⭐';
+      message = 'Great job! Keep it up!';
+    } else if (pct >= 0.5) {
+      emoji = '👍';
+      message = 'Good effort! Practice more!';
+    } else {
+      emoji = '💪';
+      message = "Keep trying — you'll get there!";
+    }
+
+    Widget banner = Container(
+      margin: const EdgeInsets.fromLTRB(20, 20, 20, 0),
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: passed
+              ? [const Color(0xFF6BCB77), const Color(0xFF4ECDC4)]
+              : [const Color(0xFFFF9F43), const Color(0xFFFF6B6B)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [
+          BoxShadow(
+            color: (passed ? AppTheme.accentMint : AppTheme.accentOrange)
+                .withValues(alpha: 0.3),
+            blurRadius: 18,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Text(emoji, style: const TextStyle(fontSize: 40)),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '$_score / $total $emoji',
+                  style: const TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.w900,
+                      color: Colors.white,
+                      fontFamily: 'Nunito'),
+                ),
+                Text(
+                  message,
+                  style: const TextStyle(
+                      fontSize: 14,
+                      color: Colors.white,
+                      fontFamily: 'Nunito',
+                      fontWeight: FontWeight.w600),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+
+    // Celebration animation when score >= 70 %
+    if (passed) {
+      return banner
+          .animate()
+          .fadeIn(duration: 400.ms)
+          .slideY(
+              begin: -0.2,
+              end: 0,
+              duration: 400.ms,
+              curve: Curves.easeOut)
+          .then()
+          .shimmer(
+              duration: 1200.ms,
+              color: Colors.white.withValues(alpha: 0.3));
+    } else {
+      return banner
+          .animate()
+          .fadeIn(duration: 400.ms)
+          .slideY(
+              begin: -0.2,
+              end: 0,
+              duration: 400.ms,
+              curve: Curves.easeOut);
+    }
+  }
+
+  // ── Question card ──────────────────────────────────────────────────────────
+
+  Widget _buildQuestionCard(dynamic raw, int questionIndex) {
+    final q =
+        raw is Map ? Map<String, dynamic>.from(raw) : <String, dynamic>{};
     final question = q['question']?.toString() ?? '';
     final answer = q['answer']?.toString() ?? '';
     final optionsRaw = q['options'];
+
     List<MapEntry<String, String>> options = [];
     if (optionsRaw is Map) {
-      optionsRaw.forEach((k, v) => options.add(MapEntry(k.toString(), v.toString())));
+      optionsRaw.forEach(
+          (k, v) => options.add(MapEntry(k.toString(), v.toString())));
     } else if (optionsRaw is List) {
       for (var i = 0; i < optionsRaw.length; i++) {
-        options.add(MapEntry(String.fromCharCode(65 + i), optionsRaw[i].toString()));
+        options.add(
+            MapEntry(String.fromCharCode(65 + i), optionsRaw[i].toString()));
       }
     }
+
+    final isSubmitted = _submitted[questionIndex] == true;
+    final selectedKey = _selectedAnswers[questionIndex];
+    final hasSelection = selectedKey != null;
+
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       padding: const EdgeInsets.all(18),
@@ -251,27 +447,73 @@ class _QuizScreenState extends State<QuizScreen> {
         color: Colors.white,
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
-          BoxShadow(color: AppTheme.accentMint.withValues(alpha: 0.1),
-              blurRadius: 14, offset: const Offset(0, 4)),
+          BoxShadow(
+              color: AppTheme.accentMint.withValues(alpha: 0.1),
+              blurRadius: 14,
+              offset: const Offset(0, 4)),
         ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('${index + 1}. $question',
-              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700,
-                  fontFamily: 'Nunito', color: Color(0xFF1A0A3E))),
+          Text('${questionIndex + 1}. $question',
+              style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                  fontFamily: 'Nunito',
+                  color: Color(0xFF1A0A3E))),
           const SizedBox(height: 12),
-          ...options.map((opt) => _optionTile(opt.key, opt.value, answer)),
-          const SizedBox(height: 14),
+
+          // Option tiles
+          ...options.map((opt) => _optionTile(
+                optKey: opt.key,
+                value: opt.value,
+                answer: answer,
+                questionIndex: questionIndex,
+                isSubmitted: isSubmitted,
+                selectedKey: selectedKey,
+              )),
+
+          const SizedBox(height: 10),
+
+          // Check Answer button
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: (hasSelection && !isSubmitted)
+                  ? () =>
+                      _submitAnswer(questionIndex, selectedKey, answer)
+                  : null,
+              icon: const Icon(Icons.check_circle_outline, size: 18),
+              label: const Text('Check Answer ✓'),
+              style: ElevatedButton.styleFrom(
+                minimumSize: const Size(double.infinity, 46),
+                backgroundColor: AppTheme.accentMint,
+                foregroundColor: Colors.white,
+                disabledBackgroundColor: Colors.grey.shade200,
+                disabledForegroundColor: Colors.grey.shade400,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14)),
+                textStyle: const TextStyle(
+                    fontFamily: 'Nunito',
+                    fontWeight: FontWeight.w700,
+                    fontSize: 15),
+              ),
+            ),
+          ),
+
+          const SizedBox(height: 8),
+
+          // Explain button
           SizedBox(
             width: double.infinity,
             child: OutlinedButton.icon(
               onPressed: () => showExplanationSheet(
                 context: context,
                 api: _api,
-                username: context.read<AuthProvider>().user?.username ?? '',
-                title: 'Explain Q${index + 1}',
+                username:
+                    context.read<AuthProvider>().user?.username ?? '',
+                title: 'Explain Q${questionIndex + 1}',
                 kind: 'quiz',
                 question: question,
                 correctOption: answer,
@@ -285,7 +527,8 @@ class _QuizScreenState extends State<QuizScreen> {
               label: const Text('Explain this answer'),
               style: OutlinedButton.styleFrom(
                 minimumSize: const Size(double.infinity, 46),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14)),
               ),
             ),
           ),
@@ -294,35 +537,145 @@ class _QuizScreenState extends State<QuizScreen> {
     );
   }
 
-  Widget _optionTile(String key, String value, String answer) {
-    final isAnswer = key.trim().toUpperCase() == answer.trim().toUpperCase() ||
-        value.trim().toLowerCase() == answer.trim().toLowerCase();
-    return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      child: Row(
-        children: [
-          Container(
-            width: 32,
-            height: 32,
-            decoration: BoxDecoration(
-              color: isAnswer ? AppTheme.accentMint.withValues(alpha: 0.2) : Colors.grey.shade100,
-              borderRadius: BorderRadius.circular(10),
+  /// Called when the child presses "Check Answer ✓".
+  void _submitAnswer(
+      int questionIndex, String? selectedKey, String answer) {
+    final isCorrect =
+        selectedKey != null && _isCorrectOption(selectedKey, '', answer);
+    setState(() {
+      _submitted[questionIndex] = true;
+      if (isCorrect) _score++;
+    });
+  }
+
+  // ── Option tile ────────────────────────────────────────────────────────────
+
+  Widget _optionTile({
+    required String optKey,
+    required String value,
+    required String answer,
+    required int questionIndex,
+    required bool isSubmitted,
+    required String? selectedKey,
+  }) {
+    final isCorrect = _isCorrectOption(optKey, value, answer);
+    final isSelected = selectedKey == optKey;
+
+    // Determine appearance
+    Color bgColor;
+    Color textColor;
+    Color keyBgColor;
+    Color keyTextColor;
+    Color borderColor;
+    double borderWidth;
+    Widget? trailingIcon;
+
+    if (!isSubmitted) {
+      // Before submission: highlight only the selected option lightly
+      if (isSelected) {
+        bgColor = AppTheme.primary.withValues(alpha: 0.08);
+        keyBgColor = AppTheme.primary.withValues(alpha: 0.18);
+        keyTextColor = AppTheme.primary;
+        textColor = AppTheme.primary;
+        borderColor = AppTheme.primary.withValues(alpha: 0.4);
+        borderWidth = 1.5;
+      } else {
+        bgColor = Colors.grey.shade50;
+        keyBgColor = Colors.grey.shade100;
+        keyTextColor = Colors.grey.shade600;
+        textColor = Colors.black87;
+        borderColor = Colors.transparent;
+        borderWidth = 1.5;
+      }
+      trailingIcon = null;
+    } else {
+      // After submission: reveal correct / wrong / neutral
+      if (isCorrect) {
+        bgColor = AppTheme.accentMint.withValues(alpha: 0.12);
+        keyBgColor = AppTheme.accentMint.withValues(alpha: 0.25);
+        keyTextColor = AppTheme.accentMint;
+        textColor = const Color(0xFF1E7D34);
+        borderColor = AppTheme.accentMint.withValues(alpha: 0.5);
+        borderWidth = 1.5;
+        trailingIcon = const Icon(Icons.check_circle,
+            color: AppTheme.accentMint, size: 20);
+      } else if (isSelected) {
+        // Wrong selection
+        bgColor = AppTheme.error.withValues(alpha: 0.10);
+        keyBgColor = AppTheme.error.withValues(alpha: 0.20);
+        keyTextColor = AppTheme.error;
+        textColor = AppTheme.error;
+        borderColor = AppTheme.error.withValues(alpha: 0.4);
+        borderWidth = 1.5;
+        trailingIcon =
+            const Icon(Icons.cancel, color: AppTheme.error, size: 20);
+      } else {
+        // Other un-selected, wrong options after submission
+        bgColor = Colors.grey.shade50;
+        keyBgColor = Colors.grey.shade200;
+        keyTextColor = Colors.grey.shade400;
+        textColor = Colors.grey.shade400;
+        borderColor = Colors.transparent;
+        borderWidth = 1.5;
+        trailingIcon = null;
+      }
+    }
+
+    return GestureDetector(
+      onTap: isSubmitted
+          ? null // locked after submission
+          : () {
+              setState(() {
+                _selectedAnswers[questionIndex] = optKey;
+              });
+            },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        margin: const EdgeInsets.only(bottom: 8),
+        padding:
+            const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          color: bgColor,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: borderColor, width: borderWidth),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 32,
+              height: 32,
+              decoration: BoxDecoration(
+                color: keyBgColor,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Center(
+                child: Text(optKey,
+                    style: TextStyle(
+                        fontWeight: FontWeight.w800,
+                        color: keyTextColor)),
+              ),
             ),
-            child: Center(
-              child: Text(key, style: TextStyle(fontWeight: FontWeight.w800,
-                  color: isAnswer ? AppTheme.accentMint : Colors.grey.shade600)),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(value,
+                  style: TextStyle(fontSize: 14, color: textColor)),
             ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(value,
-                style: TextStyle(fontSize: 14, color: isAnswer ? AppTheme.accentMint : Colors.black87)),
-          ),
-          if (isAnswer) const Icon(Icons.check_circle, color: AppTheme.accentMint, size: 18),
-        ],
+            if (trailingIcon != null) trailingIcon,
+          ],
+        ),
       ),
     );
   }
+
+  /// Returns true if this option matches the correct answer key or value.
+  bool _isCorrectOption(String key, String value, String answer) {
+    return key.trim().toUpperCase() == answer.trim().toUpperCase() ||
+        (value.isNotEmpty &&
+            value.trim().toLowerCase() ==
+                answer.trim().toLowerCase());
+  }
+
+  // ── Home screen widgets ────────────────────────────────────────────────────
 
   Widget _buildHeader() {
     return Container(
@@ -333,7 +686,8 @@ class _QuizScreenState extends State<QuizScreen> {
           end: Alignment.bottomRight,
           colors: [Color(0xFF4ECDC4), Color(0xFF6BCB77)],
         ),
-        borderRadius: BorderRadius.vertical(bottom: Radius.circular(36)),
+        borderRadius:
+            BorderRadius.vertical(bottom: Radius.circular(36)),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -343,11 +697,17 @@ class _QuizScreenState extends State<QuizScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Text('🏆 Quiz Time!',
-                    style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900,
-                        color: Colors.white, fontFamily: 'Nunito')),
+                    style: TextStyle(
+                        fontSize: 28,
+                        fontWeight: FontWeight.w900,
+                        color: Colors.white,
+                        fontFamily: 'Nunito')),
                 Text('Test your knowledge & win stars! ⭐',
-                    style: TextStyle(fontSize: 14, color: Colors.white.withValues(alpha: 0.85),
-                        fontFamily: 'Nunito', fontWeight: FontWeight.w600)),
+                    style: TextStyle(
+                        fontSize: 14,
+                        color: Colors.white.withValues(alpha: 0.85),
+                        fontFamily: 'Nunito',
+                        fontWeight: FontWeight.w600)),
                 const SizedBox(height: 16),
                 Row(
                   children: [
@@ -374,15 +734,24 @@ class _QuizScreenState extends State<QuizScreen> {
         border: Border.all(color: color.withValues(alpha: 0.4)),
       ),
       child: Text(text,
-          style: const TextStyle(fontSize: 12, color: Colors.white,
-              fontFamily: 'Nunito', fontWeight: FontWeight.w700)),
+          style: const TextStyle(
+              fontSize: 12,
+              color: Colors.white,
+              fontFamily: 'Nunito',
+              fontWeight: FontWeight.w700)),
     );
   }
+
+  // ── Quiz type chips ────────────────────────────────────────────────────────
 
   Widget _buildQuizTypeRow() {
     final types = [
       {'emoji': '🎯', 'label': '10 Qs', 'color': AppTheme.primary},
-      {'emoji': '⚡', 'label': 'Speed', 'color': AppTheme.accentOrange},
+      {
+        'emoji': '⚡',
+        'label': 'Speed',
+        'color': AppTheme.accentOrange
+      },
       {'emoji': '🔥', 'label': 'Hard', 'color': AppTheme.error},
       {'emoji': '🌟', 'label': 'Mixed', 'color': AppTheme.accentPink},
     ];
@@ -394,30 +763,57 @@ class _QuizScreenState extends State<QuizScreen> {
           Row(
             children: [
               const Text('⚡ ', style: TextStyle(fontSize: 20)),
-              Text('Quiz Types', style: Theme.of(context).textTheme.titleLarge),
+              Text('Quiz Types',
+                  style: Theme.of(context).textTheme.titleLarge),
             ],
           ),
           const SizedBox(height: 14),
           Row(
             children: types.map((t) {
               final color = t['color'] as Color;
+              final label = t['label'] as String;
+              final isSelected = _selectedType == label;
               return Expanded(
-                child: Container(
-                  margin: const EdgeInsets.only(right: 10),
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  decoration: BoxDecoration(
-                    color: color.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: color.withValues(alpha: 0.3), width: 1.5),
-                  ),
-                  child: Column(
-                    children: [
-                      Text(t['emoji'] as String, style: const TextStyle(fontSize: 22)),
-                      const SizedBox(height: 4),
-                      Text(t['label'] as String,
-                          style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700,
-                              color: color, fontFamily: 'Nunito')),
-                    ],
+                child: GestureDetector(
+                  onTap: () => setState(() => _selectedType = label),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
+                    margin: const EdgeInsets.only(right: 10),
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    decoration: BoxDecoration(
+                      color: isSelected
+                          ? color.withValues(alpha: 0.22)
+                          : color.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: isSelected
+                            ? color
+                            : color.withValues(alpha: 0.3),
+                        width: isSelected ? 2.0 : 1.5,
+                      ),
+                      boxShadow: isSelected
+                          ? [
+                              BoxShadow(
+                                color: color.withValues(alpha: 0.25),
+                                blurRadius: 8,
+                                offset: const Offset(0, 3),
+                              )
+                            ]
+                          : [],
+                    ),
+                    child: Column(
+                      children: [
+                        Text(t['emoji'] as String,
+                            style: const TextStyle(fontSize: 22)),
+                        const SizedBox(height: 4),
+                        Text(label,
+                            style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                                color: color,
+                                fontFamily: 'Nunito')),
+                      ],
+                    ),
                   ),
                 ),
               );
@@ -428,12 +824,15 @@ class _QuizScreenState extends State<QuizScreen> {
     );
   }
 
+  // ── Subject quiz cards ─────────────────────────────────────────────────────
+
   Widget _buildSubjectQuizCard(Subject subject, int index) {
     final gradient = AppTheme.subjectGradient(subject.subjectName);
     final emoji = AppTheme.subjectEmoji(subject.subjectName);
     final color = gradient.colors.first;
     return GestureDetector(
-      onTap: () => _startQuiz(subject.subjectName, subject.subjectName),
+      onTap: () =>
+          _startQuiz(subject.subjectName, subject.subjectName),
       child: Container(
         margin: const EdgeInsets.only(bottom: 12),
         padding: const EdgeInsets.all(16),
@@ -441,7 +840,10 @@ class _QuizScreenState extends State<QuizScreen> {
           color: Colors.white,
           borderRadius: BorderRadius.circular(20),
           boxShadow: [
-            BoxShadow(color: color.withValues(alpha: 0.12), blurRadius: 16, offset: const Offset(0, 4)),
+            BoxShadow(
+                color: color.withValues(alpha: 0.12),
+                blurRadius: 16,
+                offset: const Offset(0, 4)),
           ],
         ),
         child: Row(
@@ -449,8 +851,12 @@ class _QuizScreenState extends State<QuizScreen> {
             Container(
               width: 52,
               height: 52,
-              decoration: BoxDecoration(gradient: gradient, borderRadius: BorderRadius.circular(16)),
-              child: Center(child: Text(emoji, style: const TextStyle(fontSize: 24))),
+              decoration: BoxDecoration(
+                  gradient: gradient,
+                  borderRadius: BorderRadius.circular(16)),
+              child: Center(
+                  child: Text(emoji,
+                      style: const TextStyle(fontSize: 24))),
             ),
             const SizedBox(width: 14),
             Expanded(
@@ -458,24 +864,37 @@ class _QuizScreenState extends State<QuizScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(subject.subjectName,
-                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700,
-                          fontFamily: 'Nunito', color: Color(0xFF1A0A3E))),
+                      style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                          fontFamily: 'Nunito',
+                          color: Color(0xFF1A0A3E))),
                   Row(
                     children: [
-                      const Text('⭐⭐⭐', style: TextStyle(fontSize: 12)),
+                      const Text('⭐⭐⭐',
+                          style: TextStyle(fontSize: 12)),
                       Text(' 10 questions',
-                          style: TextStyle(fontSize: 12, color: Colors.grey.shade500, fontFamily: 'Nunito')),
+                          style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey.shade500,
+                              fontFamily: 'Nunito')),
                     ],
                   ),
                 ],
               ),
             ),
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              decoration: BoxDecoration(gradient: gradient, borderRadius: BorderRadius.circular(12)),
+              padding: const EdgeInsets.symmetric(
+                  horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                  gradient: gradient,
+                  borderRadius: BorderRadius.circular(12)),
               child: const Text('Play ▶',
-                  style: TextStyle(color: Colors.white, fontSize: 13,
-                      fontWeight: FontWeight.w700, fontFamily: 'Nunito')),
+                  style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      fontFamily: 'Nunito')),
             ),
           ],
         ),
@@ -483,14 +902,18 @@ class _QuizScreenState extends State<QuizScreen> {
     );
   }
 
+  // ── Loading skeleton ───────────────────────────────────────────────────────
+
   Widget _buildLoading() {
     return Column(
       children: [
         Container(
           height: 220,
           decoration: const BoxDecoration(
-            gradient: LinearGradient(colors: [Color(0xFF4ECDC4), Color(0xFF6BCB77)]),
-            borderRadius: BorderRadius.vertical(bottom: Radius.circular(36)),
+            gradient: LinearGradient(
+                colors: [Color(0xFF4ECDC4), Color(0xFF6BCB77)]),
+            borderRadius:
+                BorderRadius.vertical(bottom: Radius.circular(36)),
           ),
         ),
         const Expanded(
@@ -501,7 +924,10 @@ class _QuizScreenState extends State<QuizScreen> {
                 CircularProgressIndicator(color: AppTheme.accentMint),
                 SizedBox(height: 16),
                 Text('Loading quiz... 🏆',
-                    style: TextStyle(fontFamily: 'Nunito', fontWeight: FontWeight.w600, color: Colors.grey)),
+                    style: TextStyle(
+                        fontFamily: 'Nunito',
+                        fontWeight: FontWeight.w600,
+                        color: Colors.grey)),
               ],
             ),
           ),

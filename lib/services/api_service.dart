@@ -282,12 +282,15 @@ class ApiService {
     String? board,
     String? lessonClass,
     String? publication,
+    /// Optional quiz type selected by the child (e.g. '10 Qs', 'Speed', 'Hard', 'Mixed').
+    String? quizType,
   }) async {
     final response = await http.post(
       Uri.parse('$_baseUrl/lesson/generate_quiz'),
       headers: _headers,
       body: jsonEncode({
         'summary': null,
+        if (quizType != null) 'quiz_type': quizType,
         'session': _buildSession(
           subject: subject,
           lesson: lessonName,
@@ -308,12 +311,14 @@ class ApiService {
     String? board,
     String? lessonClass,
     String? publication,
+    String? mode,
   }) async {
     final request = http.Request('POST', Uri.parse('$_baseUrl/lesson/practice_stream'));
     request.headers.addAll(_headers);
     request.body = jsonEncode({
       'lesson_name': lessonName,
       'num_questions': numQuestions,
+      if (mode != null) 'mode': mode,
       'session': _buildSession(
         subject: subject,
         lesson: lessonName,
