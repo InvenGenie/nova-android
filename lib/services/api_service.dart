@@ -2,12 +2,14 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'http_client.dart';
 
 class ApiService {
   static const String _baseUrlKey = 'api_base_url';
   static const String _cookieKey = 'session_cookie';
 
   String _baseUrl = '';
+  final http.Client _client = createHttpClient();
   String? _token;
   String? _sessionCookie;
   String? get token => _token;
@@ -18,7 +20,11 @@ class ApiService {
 
   Future<void> init() async {
     final prefs = await SharedPreferences.getInstance();
-    _baseUrl = prefs.getString(_baseUrlKey) ?? dotenv.env['API_BASE_URL'] ?? 'https://novamymentor.cloud/nova-api';
+    _baseUrl = prefs.getString(_baseUrlKey) ??
+        const String.fromEnvironment('API_BASE_URL', defaultValue: '').trim();
+    if (_baseUrl.isEmpty) {
+      _baseUrl = dotenv.env['API_BASE_URL'] ?? 'https://novamymentor.cloud/nova-api';
+    }
     _token = prefs.getString('auth_token');
     _sessionCookie = prefs.getString(_cookieKey);
     await _loadPersistedCache();
@@ -33,7 +39,9 @@ class ApiService {
 
   Map<String, String> get _headers => {
     'Content-Type': 'application/json',
-    if (_sessionCookie != null) 'Cookie': _sessionCookie!,
+    // Browsers manage cookies when BrowserClient.withCredentials is enabled;
+    // manually setting Cookie is forbidden by the Fetch API.
+    if (!isWeb && _sessionCookie != null) 'Cookie': _sessionCookie!,
   };
 
   Future<void> setToken(String? token) async {
@@ -65,7 +73,7 @@ class ApiService {
   }
 
   Future<Map<String, dynamic>> login(String username, String password) async {
-    final response = await http.post(
+    final response = await _client.post(
       Uri.parse('$_baseUrl/login'),
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode({'username': username, 'password': password}),
@@ -79,7 +87,7 @@ class ApiService {
   }
 
   Future<Map<String, dynamic>> getSession() async {
-    final response = await http.get(
+    final response = await _client.get(
       Uri.parse('$_baseUrl/portal_session'),
       headers: _headers,
     );
@@ -130,7 +138,7 @@ class ApiService {
   }
 
   Future<List<dynamic>> _cachedGet(String key, String path, String listKey) async {
-    final response = await http.get(Uri.parse('$_baseUrl$path'), headers: _headers);
+    final response = await _client.get(Uri.parse('$_baseUrl$path'), headers: _headers);
     final list = _extractList(jsonDecode(response.body), listKey);
     await _storeCache(key, list);
     return list;
@@ -144,7 +152,7 @@ class ApiService {
 
     final key = _subjectsKey(board: board, classId: classId, pub: pub);
     final uri = Uri.parse('$_baseUrl/get_subjects').replace(queryParameters: params.isNotEmpty ? params : null);
-    final response = await http.get(uri, headers: _headers);
+    final response = await _client.get(uri, headers: _headers);
     final list = _extractList(jsonDecode(response.body), 'subjects');
     await _storeCache(key, list);
     return list;
@@ -160,7 +168,7 @@ class ApiService {
       _cachedGet('publications', '/get_publications', 'publications');
 
   Future<List<dynamic>> getLessons(int board, int classId, int pub, int subjectId) async {
-    final response = await http.get(
+    final response = await _client.get(
       Uri.parse('$_baseUrl/get_filtered_lessons')
           .replace(queryParameters: {
         'board': board.toString(),
@@ -175,7 +183,7 @@ class ApiService {
 
   Future<Map<String, dynamic>> getStudyPlan(String username) async {
     final now = DateTime.now();
-    final response = await http.get(
+    final response = await _client.get(
       Uri.parse('$_baseUrl/study-planner/get-plans?username=$username&year=${now.year}&month=${now.month}'),
       headers: _headers,
     );
@@ -183,7 +191,7 @@ class ApiService {
   }
 
   Future<Map<String, dynamic>> saveStudyPlan(Map<String, dynamic> data) async {
-    final response = await http.post(
+    final response = await _client.post(
       Uri.parse('$_baseUrl/study-planner/save-plan'),
       headers: _headers,
       body: jsonEncode(data),
@@ -192,7 +200,7 @@ class ApiService {
   }
 
   Future<Map<String, dynamic>> startTracking(String username, String subject) async {
-    final response = await http.post(
+    final response = await _client.post(
       Uri.parse('$_baseUrl/start_tracking'),
       headers: _headers,
       body: jsonEncode({'username': username, 'subject': subject}),
@@ -201,7 +209,7 @@ class ApiService {
   }
 
   Future<Map<String, dynamic>> saveTime(Map<String, dynamic> data) async {
-    final response = await http.post(
+    final response = await _client.post(
       Uri.parse('$_baseUrl/save_time'),
       headers: _headers,
       body: jsonEncode(data),
@@ -210,7 +218,7 @@ class ApiService {
   }
 
   Future<Map<String, dynamic>> getWeeklyReport(String username) async {
-    final response = await http.get(
+    final response = await _client.get(
       Uri.parse('$_baseUrl/parent/weekly-report-data?username=$username'),
       headers: _headers,
     );
@@ -249,7 +257,7 @@ class ApiService {
     String? lessonClass,
     String? publication,
   }) async {
-    final response = await http.post(
+    final response = await _client.post(
       Uri.parse('$_baseUrl/lesson/content'),
       headers: _headers,
       body: jsonEncode({
@@ -285,7 +293,7 @@ class ApiService {
     /// Optional quiz type selected by the child (e.g. '10 Qs', 'Speed', 'Hard', 'Mixed').
     String? quizType,
   }) async {
-    final response = await http.post(
+    final response = await _client.post(
       Uri.parse('$_baseUrl/lesson/generate_quiz'),
       headers: _headers,
       body: jsonEncode({
@@ -327,7 +335,7 @@ class ApiService {
         publication: publication,
       ),
     });
-    final streamed = await request.send();
+    final streamed = await _client.send(request);
     final body = await streamed.stream.transform(utf8.decoder).join();
     return _stripMarkers(body);
   }
@@ -357,7 +365,7 @@ class ApiService {
         return {'explanation': local, 'cached': true, 'source': 'local'};
       }
     }
-    final response = await http.post(
+    final response = await _client.post(
       Uri.parse('$_baseUrl/lesson/android/explanation'),
       headers: _headers,
       body: jsonEncode({

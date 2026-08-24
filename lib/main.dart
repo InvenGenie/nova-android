@@ -16,7 +16,11 @@ import 'theme/app_theme.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await dotenv.load();
+  try {
+    await dotenv.load();
+  } catch (_) {
+    // Builds can provide API_BASE_URL with --dart-define instead.
+  }
   runApp(const NovaApp());
 }
 
