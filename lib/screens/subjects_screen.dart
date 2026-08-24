@@ -19,6 +19,9 @@ class _SubjectsScreenState extends State<SubjectsScreen>
   bool _loading = true;
   String _error = '';
   List<Map<String, dynamic>> _classes = [];
+  // Curriculum class IDs are database IDs, not the numeric display label.
+  // Example: 9th is class_id 4 in New-Nova's curriculum database.
+  int _activeClassId = 1;
   late AnimationController _animController;
   bool _animated = false;
   // Real per-subject progress from weekly report
@@ -83,6 +86,7 @@ class _SubjectsScreenState extends State<SubjectsScreen>
     final cachedClasses = _api.getCachedClasses();
     if (cachedClasses != null) {
       final classId = _resolveClassId(cachedClasses, user.userClass);
+      _activeClassId = classId;
       final cachedSubjects =
           _api.getCachedSubjects(board: 1, classId: classId, pub: 1);
       if (cachedSubjects != null) {
@@ -94,13 +98,15 @@ class _SubjectsScreenState extends State<SubjectsScreen>
     try {
       final classesData = await _api.getClasses();
       final classId = _resolveClassId(classesData, user.userClass);
+      _activeClassId = classId;
       final subjectsData =
           await _api.getSubjects(board: 1, classId: classId, pub: 1);
       _applySubjects(subjectsData, classesData);
     } catch (e) {
       if (mounted && _subjects.isEmpty) {
         setState(() {
-          _error = 'Oops! Couldn\'t load your subjects. Check your internet and try again! 🌐';
+          _error =
+              'Oops! Couldn\'t load your subjects. Check your internet and try again! 🌐';
           _loading = false;
         });
       }
@@ -147,8 +153,8 @@ class _SubjectsScreenState extends State<SubjectsScreen>
                             padding: const EdgeInsets.fromLTRB(20, 20, 20, 40),
                             sliver: SliverList(
                               delegate: SliverChildBuilderDelegate(
-                                (context, i) => _buildSubjectCard(
-                                    _subjects[i], i),
+                                (context, i) =>
+                                    _buildSubjectCard(_subjects[i], i),
                                 childCount: _subjects.length,
                               ),
                             ),
@@ -216,6 +222,7 @@ class _SubjectsScreenState extends State<SubjectsScreen>
                             board: 1, classId: classId, pub: 1);
                         if (mounted) {
                           setState(() {
+                            _activeClassId = classId;
                             _subjects = data
                                 .map((s) => s is Map<String, dynamic>
                                     ? Subject.fromJson(s)
@@ -226,8 +233,10 @@ class _SubjectsScreenState extends State<SubjectsScreen>
                         }
                       } catch (e) {
                         if (mounted) {
-                          setState(
-                              () {_error = e.toString(); _loading = false;});
+                          setState(() {
+                            _error = e.toString();
+                            _loading = false;
+                          });
                         }
                       }
                     },
@@ -290,6 +299,9 @@ class _SubjectsScreenState extends State<SubjectsScreen>
         onTap: () => Navigator.pushNamed(context, '/study', arguments: {
           'subject_id': subject.subjectId,
           'subject_name': subject.subjectName,
+          'board_id': 1,
+          'class_id': _activeClassId,
+          'pub_id': 1,
         }),
         child: Container(
           margin: const EdgeInsets.only(bottom: 16),
@@ -345,8 +357,8 @@ class _SubjectsScreenState extends State<SubjectsScreen>
                         borderRadius: BorderRadius.circular(20),
                       ),
                       child: Center(
-                        child: Text(emoji,
-                            style: const TextStyle(fontSize: 30)),
+                        child:
+                            Text(emoji, style: const TextStyle(fontSize: 30)),
                       ),
                     ),
                     const SizedBox(width: 16),
@@ -384,8 +396,8 @@ class _SubjectsScreenState extends State<SubjectsScreen>
                                     value: progress,
                                     backgroundColor:
                                         Colors.white.withValues(alpha: 0.2),
-                                    valueColor:
-                                        const AlwaysStoppedAnimation(Colors.white),
+                                    valueColor: const AlwaysStoppedAnimation(
+                                        Colors.white),
                                     minHeight: 5,
                                   ),
                                 ),
@@ -396,7 +408,8 @@ class _SubjectsScreenState extends State<SubjectsScreen>
                                       '${(progress * 100).toStringAsFixed(0)}% score this week',
                                       style: TextStyle(
                                         fontSize: 11,
-                                        color: Colors.white.withValues(alpha: 0.8),
+                                        color:
+                                            Colors.white.withValues(alpha: 0.8),
                                         fontFamily: 'Nunito',
                                         fontWeight: FontWeight.w600,
                                       ),
@@ -479,7 +492,10 @@ class _SubjectsScreenState extends State<SubjectsScreen>
             const SizedBox(height: 20),
             ElevatedButton(
               onPressed: () {
-                setState(() { _loading = true; _error = ''; });
+                setState(() {
+                  _loading = true;
+                  _error = '';
+                });
                 _initData();
               },
               child: const Text('Try Again 🔄'),
