@@ -46,13 +46,16 @@ class NovaApp extends StatelessWidget {
             onGenerateRoute: (settings) {
               switch (settings.name) {
                 case '/splash':
-                  return MaterialPageRoute(builder: (_) => const SplashScreen());
+                  return MaterialPageRoute(
+                      builder: (_) => const SplashScreen());
                 case '/login':
                   return MaterialPageRoute(builder: (_) => const LoginScreen());
                 case '/dashboard':
-                  return MaterialPageRoute(builder: (_) => const StudentDashboard());
+                  return MaterialPageRoute(
+                      builder: (_) => const StudentDashboard());
                 case '/subjects':
-                  return MaterialPageRoute(builder: (_) => const SubjectsScreen());
+                  return MaterialPageRoute(
+                      builder: (_) => const SubjectsScreen());
                 case '/study':
                   final args = settings.arguments as Map<String, dynamic>;
                   return MaterialPageRoute(
@@ -60,6 +63,9 @@ class NovaApp extends StatelessWidget {
                       subjectId: args['subject_id'],
                       subjectName: args['subject_name'],
                       lessonId: args['lesson_id'],
+                      boardId: args['board_id'],
+                      classId: args['class_id'],
+                      pubId: args['pub_id'],
                     ),
                   );
                 case '/practice':
@@ -75,9 +81,11 @@ class NovaApp extends StatelessWidget {
                     ),
                   );
                 case '/profile':
-                  return MaterialPageRoute(builder: (_) => const ProfileScreen());
+                  return MaterialPageRoute(
+                      builder: (_) => const ProfileScreen());
                 case '/report':
-                  return MaterialPageRoute(builder: (_) => const ReportScreen());
+                  return MaterialPageRoute(
+                      builder: (_) => const ReportScreen());
                 default:
                   return MaterialPageRoute(builder: (_) => const LoginScreen());
               }
