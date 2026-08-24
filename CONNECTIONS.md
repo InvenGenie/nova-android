@@ -10,8 +10,8 @@ the web application's database or business logic.
 
 The client reads `API_BASE_URL` in this order:
 
-1. Saved local preference (allows a developer override)
-2. `--dart-define=API_BASE_URL=...`
+1. `--dart-define=API_BASE_URL=...` (always wins for release builds)
+2. Saved local preference (developer-only override when no build define exists)
 3. Optional `.env` value
 4. Production default: `https://novamymentor.cloud/nova-api`
 

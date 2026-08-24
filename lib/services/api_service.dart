@@ -20,10 +20,16 @@ class ApiService {
 
   Future<void> init() async {
     final prefs = await SharedPreferences.getInstance();
-    _baseUrl = prefs.getString(_baseUrlKey) ??
+    // A release build's explicit dart-define must win over a stale laptop
+    // preference, otherwise a production APK/Web build could keep calling
+    // localhost after the same device was used for local development.
+    final buildUrl =
         const String.fromEnvironment('API_BASE_URL', defaultValue: '').trim();
+    _baseUrl =
+        buildUrl.isNotEmpty ? buildUrl : prefs.getString(_baseUrlKey) ?? '';
     if (_baseUrl.isEmpty) {
-      _baseUrl = dotenv.env['API_BASE_URL'] ?? 'https://novamymentor.cloud/nova-api';
+      _baseUrl =
+          dotenv.env['API_BASE_URL'] ?? 'https://novamymentor.cloud/nova-api';
     }
     _token = prefs.getString('auth_token');
     _sessionCookie = prefs.getString(_cookieKey);
@@ -38,11 +44,11 @@ class ApiService {
   }
 
   Map<String, String> get _headers => {
-    'Content-Type': 'application/json',
-    // Browsers manage cookies when BrowserClient.withCredentials is enabled;
-    // manually setting Cookie is forbidden by the Fetch API.
-    if (!isWeb && _sessionCookie != null) 'Cookie': _sessionCookie!,
-  };
+        'Content-Type': 'application/json',
+        // Browsers manage cookies when BrowserClient.withCredentials is enabled;
+        // manually setting Cookie is forbidden by the Fetch API.
+        if (!isWeb && _sessionCookie != null) 'Cookie': _sessionCookie!,
+      };
 
   Future<void> setToken(String? token) async {
     _token = token;
@@ -98,7 +104,8 @@ class ApiService {
     if (body is List) return body;
     if (body is Map) {
       if (key != null && body[key] is List) return body[key];
-      return body.values.firstWhere((v) => v is List, orElse: () => <dynamic>[]);
+      return body.values
+          .firstWhere((v) => v is List, orElse: () => <dynamic>[]);
     }
     return <dynamic>[];
   }
@@ -127,7 +134,8 @@ class ApiService {
   Future<void> _loadPersistedCache() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      for (final key in prefs.getKeys().where((k) => k.startsWith(_prefPrefix))) {
+      for (final key
+          in prefs.getKeys().where((k) => k.startsWith(_prefPrefix))) {
         final raw = prefs.getString(key);
         if (raw == null) continue;
         final data = jsonDecode(raw) as List<dynamic>;
@@ -137,21 +145,25 @@ class ApiService {
     } catch (_) {}
   }
 
-  Future<List<dynamic>> _cachedGet(String key, String path, String listKey) async {
-    final response = await _client.get(Uri.parse('$_baseUrl$path'), headers: _headers);
+  Future<List<dynamic>> _cachedGet(
+      String key, String path, String listKey) async {
+    final response =
+        await _client.get(Uri.parse('$_baseUrl$path'), headers: _headers);
     final list = _extractList(jsonDecode(response.body), listKey);
     await _storeCache(key, list);
     return list;
   }
 
-  Future<List<dynamic>> getSubjects({int? board, int? classId, int? pub}) async {
+  Future<List<dynamic>> getSubjects(
+      {int? board, int? classId, int? pub}) async {
     final params = <String, String>{};
     if (board != null) params['board'] = board.toString();
     if (classId != null) params['class'] = classId.toString();
     if (pub != null) params['pub'] = pub.toString();
 
     final key = _subjectsKey(board: board, classId: classId, pub: pub);
-    final uri = Uri.parse('$_baseUrl/get_subjects').replace(queryParameters: params.isNotEmpty ? params : null);
+    final uri = Uri.parse('$_baseUrl/get_subjects')
+        .replace(queryParameters: params.isNotEmpty ? params : null);
     final response = await _client.get(uri, headers: _headers);
     final list = _extractList(jsonDecode(response.body), 'subjects');
     await _storeCache(key, list);
@@ -167,10 +179,10 @@ class ApiService {
   Future<List<dynamic>> getPublications() async =>
       _cachedGet('publications', '/get_publications', 'publications');
 
-  Future<List<dynamic>> getLessons(int board, int classId, int pub, int subjectId) async {
+  Future<List<dynamic>> getLessons(
+      int board, int classId, int pub, int subjectId) async {
     final response = await _client.get(
-      Uri.parse('$_baseUrl/get_filtered_lessons')
-          .replace(queryParameters: {
+      Uri.parse('$_baseUrl/get_filtered_lessons').replace(queryParameters: {
         'board': board.toString(),
         'class': classId.toString(),
         'pub': pub.toString(),
@@ -184,7 +196,8 @@ class ApiService {
   Future<Map<String, dynamic>> getStudyPlan(String username) async {
     final now = DateTime.now();
     final response = await _client.get(
-      Uri.parse('$_baseUrl/study-planner/get-plans?username=$username&year=${now.year}&month=${now.month}'),
+      Uri.parse(
+          '$_baseUrl/study-planner/get-plans?username=$username&year=${now.year}&month=${now.month}'),
       headers: _headers,
     );
     return jsonDecode(response.body);
@@ -199,7 +212,8 @@ class ApiService {
     return jsonDecode(response.body);
   }
 
-  Future<Map<String, dynamic>> startTracking(String username, String subject) async {
+  Future<Map<String, dynamic>> startTracking(
+      String username, String subject) async {
     final response = await _client.post(
       Uri.parse('$_baseUrl/start_tracking'),
       headers: _headers,
@@ -290,6 +304,7 @@ class ApiService {
     String? board,
     String? lessonClass,
     String? publication,
+
     /// Optional quiz type selected by the child (e.g. '10 Qs', 'Speed', 'Hard', 'Mixed').
     String? quizType,
   }) async {
@@ -321,7 +336,8 @@ class ApiService {
     String? publication,
     String? mode,
   }) async {
-    final request = http.Request('POST', Uri.parse('$_baseUrl/lesson/practice_stream'));
+    final request =
+        http.Request('POST', Uri.parse('$_baseUrl/lesson/practice_stream'));
     request.headers.addAll(_headers);
     request.body = jsonEncode({
       'lesson_name': lessonName,
@@ -357,8 +373,8 @@ class ApiService {
     String? publication,
     bool force = false,
   }) async {
-    final cacheKey = _explanationKey(
-        username, kind, topic, subject, chapter, question, correctOption, class_, board, publication);
+    final cacheKey = _explanationKey(username, kind, topic, subject, chapter,
+        question, correctOption, class_, board, publication);
     if (!force) {
       final local = await _loadLocalExplanation(cacheKey);
       if (local != null && local.isNotEmpty) {
@@ -387,7 +403,11 @@ class ApiService {
     if (explanation.isNotEmpty) {
       await _saveLocalExplanation(cacheKey, explanation);
     }
-    return {'explanation': explanation, 'cached': body['cached'] ?? false, 'source': 'server'};
+    return {
+      'explanation': explanation,
+      'cached': body['cached'] ?? false,
+      'source': 'server'
+    };
   }
 
   String _explanationKey(
@@ -402,7 +422,8 @@ class ApiService {
     String? board,
     String? publication,
   ) {
-    final raw = '$username|$kind|${subject ?? ''}|${class_ ?? ''}|${board ?? ''}'
+    final raw =
+        '$username|$kind|${subject ?? ''}|${class_ ?? ''}|${board ?? ''}'
         '|${topic ?? ''}|${chapter ?? ''}|${question ?? ''}|${correctOption ?? ''}';
     var hash = 0;
     for (var i = 0; i < raw.length; i++) {
