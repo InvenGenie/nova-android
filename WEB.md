@@ -7,7 +7,7 @@ run in a browser without maintaining a second UI implementation.
 
 ```powershell
 flutter pub get
-flutter run -d chrome --dart-define=API_BASE_URL=http://localhost:5000/nova-api
+flutter run -d chrome --web-port=5173 --dart-define=API_BASE_URL=http://localhost:5000/nova-api
 ```
 
 The New-Nova backend must be running on `http://localhost:5000`.
